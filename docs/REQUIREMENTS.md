@@ -33,3 +33,13 @@
 6. 无外部 JS/CDN/API/Key，模拟服务 status 明确返回 live_enabled=false。
 7. Python + Node 单元/HTTP 集成 + 真浏览器定向 E2E 通过；Windows/Linux GitHub CI 按准确 SHA 验证。
 8. 不自动合并 main、不在用户电脑部署。
+
+## M1-B P1（独立 Draft PR）边界与验收
+- 默认模拟，未经授权绝无高德实际请求。
+- 可选输入起终点经纬度、最多1个途经点；历史浏览器路线配置兼容。
+- 官方 v5/direction/driving 请求参数：strategy32，cost、tmcs、polyline；解析实际 ETA、里程和道路路况分段，缺失时明确未知。
+- 真实 Web Key 仅服务器端；本地 Host/Origin 限制、JSON + 自定义头、固定高德 HTTPS 目标、不跟随重定向，拒绝跨站与恶意坐标。
+- 人工单条查询，默认日额度100、绝对上限1000、失败也计数、重启后保留计数；同线路最少5分钟、全局至少2秒。
+- GitHub Actions/Chromium 只用虚构路线与模拟供应商响应；严禁在 CI 使用真实高德 Key。
+- 本阶段仅真实道路线形 SVG 技术候选，没有官方 JS API 地图底图，不能宣称用户正式路线地图已完成。
+- 用户用途、账号实际免费配额、授权条款、真实返回、地图底图和安全代理尚待验收；需要独立用户批准才可合并。

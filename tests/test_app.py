@@ -5,6 +5,7 @@ import threading
 import unittest
 
 from app import ASSETS, make_server
+import inspect
 
 
 class LocalServerTests(unittest.TestCase):
@@ -29,6 +30,10 @@ class LocalServerTests(unittest.TestCase):
         conn.close()
         return result
 
+    def test_default_port_is_not_srm_port(self):
+        self.assertEqual(inspect.signature(make_server).parameters["port"].default, 8876)
+        self.assertNotEqual(inspect.signature(make_server).parameters["port"].default, 8765)
+
     def test_assets(self):
         for path in ASSETS:
             with self.subTest(path=path):
@@ -46,7 +51,7 @@ class LocalServerTests(unittest.TestCase):
         self.assertFalse(data["external_requests"])
 
     def test_host_rebinding_blocked(self):
-        for bad in ("evil.example:8765", "127.0.0.1.evil.example", "example.org"):
+        for bad in ("evil.example:8876", "127.0.0.1.evil.example", "example.org"):
             self.assertEqual(self.request("/", host=bad)[0], 403)
 
     def test_unknown_and_traversal_paths(self):

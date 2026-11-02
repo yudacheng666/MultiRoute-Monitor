@@ -77,13 +77,13 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port=8765):
+def make_server(port=8876):
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
 def main():
     parser = argparse.ArgumentParser(description="MultiRoute-Monitor mock-only local server")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=8876)
     args = parser.parse_args()
     with make_server(args.port) as server:
         print("模拟模式（非真实路况）：http://127.0.0.1:%s/" % server.server_port, flush=True)

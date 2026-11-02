@@ -25,9 +25,9 @@
     <main>
       <section class="intro">
         <div>
-          <div class="eyebrow">LOCAL ROUTE OVERVIEW <span class="sep">/</span> M1-A</div>
+          <div class="eyebrow">LOCAL ROUTE OVERVIEW <span class="sep">/</span> M1-B</div>
           <h1>每条路线，一眼掌握<span class="accent">。</span></h1>
-          <p>多路线实时看板的本地交互原型。当前所有路线、时间、拥堵颜色均为虚构模拟，不代表真实道路或交通预测。</p>
+          <p>模拟模式默认开启。获得真实高德接口的使用授权并完成额度验证后，可手动查询路线；在此之前所有预计时间与路况均为虚构模拟。</p>
         </div>
         <div class="main-actions">
           <button id="refresh-all" class="btn btn-outline" type="button"><span aria-hidden="true">↻</span> 刷新全部</button>
@@ -49,6 +49,7 @@
             <button id="pause-toggle" class="btn btn-small btn-outline" type="button">暂停</button>
           </div>
         </div>
+        <p id="amap-status" class="amap-status" role="status">高德实时接口：未授权启用 · 当前仅显示模拟数据</p>
         <div id="routes" class="route-grid" aria-live="polite"></div>
         <div class="board-footnote">
           <span><i class="legend-dot clear"></i>模拟畅通 <i class="legend-dot slow"></i>模拟缓行 <i class="legend-dot busy"></i>模拟拥堵 <i class="legend-dot heavy"></i>模拟严重拥堵</span>
@@ -56,18 +57,20 @@
         </div>
       </section>
 
-      <footer><span>MultiRoute Monitor · v0.1.0 M1-A</span><span>仅用于界面和流程测试 · 未连接高德 / 未启用真实交通查询</span></footer>
+      <footer><span>MultiRoute Monitor · v0.1.0 M1-A</span><span>M1-B 候选 · 默认离线模拟；真实查询须单独授权</span></footer>
     </main>
   </div>
 
   <dialog id="route-dialog" aria-labelledby="dialog-title">
     <form id="route-form" class="route-form">
       <div class="dialog-head"><div><div class="eyebrow">ROUTE CONFIGURATION</div><h2 id="dialog-title">添加模拟路线</h2></div><button id="dialog-close" class="icon-btn" type="button" aria-label="关闭">×</button></div>
-      <p class="dialog-help">这里仅保存显示名称和模拟基础耗时，不发送任何地点信息到外部服务。</p>
+      <p class="dialog-help">显示名称和基础模拟时间保存在浏览器。下方经纬度是可选的真实查询参数；未经服务端授权启用，不会发送到高德。</p>
       <label>路线名称<input name="name" maxlength="36" required placeholder="例如：测试路线 E" autocomplete="off"></label>
       <div class="form-two"><label>起点名称<input name="origin" maxlength="60" required placeholder="例如：虚构起点" autocomplete="off"></label>
       <label>终点名称<input name="destination" maxlength="60" required placeholder="例如：虚构终点" autocomplete="off"></label></div>
       <label>模拟基础用时（分钟）<input name="base_minutes" type="number" min="5" max="240" step="1" required value="25"></label>
+      <div class="form-two"><label>起点经纬度（可选）<input name="origin_coord" placeholder="116.123456,39.123456" maxlength="45" autocomplete="off"></label><label>终点经纬度（可选）<input name="destination_coord" placeholder="116.234567,39.234567" maxlength="45" autocomplete="off"></label></div>
+      <label>途经点经纬度（可选、最多1个）<input name="waypoint_coord" placeholder="经度,纬度" maxlength="45" autocomplete="off"></label>
       <div id="form-error" class="form-error" role="alert" hidden></div>
       <div class="dialog-actions"><button id="dialog-cancel" class="btn btn-outline" type="button">取消</button><button id="dialog-save" class="btn btn-primary" type="submit">保存路线</button></div>
     </form>

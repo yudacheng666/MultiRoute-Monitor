@@ -43,3 +43,16 @@ test('safe interval and daily budget', () => {
   assert.equal(core.budgetEstimate(6,10,24),864);
   assert.throws(()=>core.budgetEstimate(7,5,24));
 });
+
+test('optional precise coordinates roundtrip without changing old routes', () => {
+  const route = {id:'city',name:'城市路线',origin:'虚构甲',destination:'虚构乙',
+    base_minutes:25,origin_coord:'116.10,39.90',destination_coord:'116.20,39.91',
+    waypoint_coord:'116.15,39.91'};
+  const normalized=core.normalizeRoute(route,route.id);
+  assert.equal(normalized.origin_coord,'116.1,39.9');
+  assert.equal(normalized.waypoint_coord,'116.15,39.91');
+  assert.deepEqual(core.loadRoutes(JSON.stringify([normalized])),[normalized]);
+  assert.throws(()=>core.normalizeRoute({...route,destination_coord:''},route.id));
+  assert.throws(()=>core.normalizeRoute({...route,origin_coord:'999,22'},route.id));
+  assert.throws(()=>core.normalizeRoute({...route,waypoint_coord:'116.1234567,39'},route.id));
+});

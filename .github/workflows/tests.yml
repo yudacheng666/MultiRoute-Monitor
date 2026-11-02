@@ -30,8 +30,8 @@ jobs:
       - name: Node mock model
         run: node --test tests/test_core.cjs tests/test_amap_map.cjs
   browser:
-    name: Real Chromium E2E (Ubuntu)
-    runs-on: ubuntu-latest
+    name: Real Chromium E2E (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -12,11 +12,11 @@ import math
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlencode
-from zoneinfo import ZoneInfo
+CHINA_TZ = timezone(timedelta(hours=8))
 
 ENDPOINT = "restapi.amap.com"
 PATH = "/v5/direction/driving"
@@ -158,7 +158,7 @@ def parse_driving(payload):
         "distance_km": round(distance / 1000, 2),
         "segments": segments,
         "traffic_available": any(x["status"] != "未知" for x in segments),
-        "fetched_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+        "fetched_at": datetime.now(CHINA_TZ).isoformat(timespec="seconds"),
     }
 
 
@@ -207,7 +207,7 @@ class LiveGateway:
             self.enabled = False
 
     def _day(self):
-        return datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        return datetime.now(CHINA_TZ).date().isoformat()
 
     def _usage(self):
         if not self.usage_file.exists():

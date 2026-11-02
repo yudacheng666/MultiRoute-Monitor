@@ -80,6 +80,37 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertFalse((Path(tmp) / "local").exists())
 
+    def test_optional_map_keys_do_not_enable_unverified_live_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"MRM_AMAP_JS_KEY": "LOCAL_EXAMPLE_JS_KEY",
+                   "MRM_AMAP_JS_SECURITY": "LOCAL_EXAMPLE_SECURITY",
+                   "MRM_AMAP_MAP_OPT_IN": "YES"}
+            gw = LiveGateway(tmp, env=env)
+            self.assertFalse(gw.map_enabled())
+            self.assertFalse(gw.status()["js_map_enabled"])
+            self.assertIsNone(gw.status()["js_map_key"])
+
+    def test_map_proxy_attempt_counter_without_supplier_requests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"MRM_AMAP_WEB_KEY": "LOCAL_FAKE_WEB_KEY",
+                   "MRM_USAGE_AUTHORIZED": "YES",
+                   "MRM_FREE_QUOTA_VERIFIED": "YES",
+                   "MRM_EXPLICIT_LIVE_OPT_IN": "YES",
+                   "MRM_AMAP_JS_KEY": "LOCAL_FAKE_JS_KEY",
+                   "MRM_AMAP_JS_SECURITY": "LOCAL_FAKE_SECURITY",
+                   "MRM_AMAP_MAP_OPT_IN": "YES"}
+            gateway = LiveGateway(tmp, env=env, transport=lambda _: EXAMPLE)
+            self.assertTrue(gateway.map_enabled())
+            self.assertEqual(gateway.status()["js_map_key"], "LOCAL_FAKE_JS_KEY")
+            self.assertEqual(gateway.status()["remaining_map_proxy_budget"], 500)
+            gateway.reserve_map_proxy()
+            self.assertEqual(gateway.status()["remaining_map_proxy_budget"], 499)
+            usage = (Path(tmp) / "local" / "amap_map_proxy_attempts.json").read_text()
+            self.assertNotIn("LOCAL_FAKE_SECURITY", usage)
+            self.assertNotIn("116.", usage)
+            again = LiveGateway(tmp, env=env)
+            self.assertEqual(again.status()["remaining_map_proxy_budget"], 499)
+
     def test_needs_all_three_authorization_flags(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {"MRM_AMAP_WEB_KEY": "FAKE", "MRM_USAGE_AUTHORIZED": "YES",

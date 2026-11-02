@@ -78,6 +78,17 @@ class LocalServerTests(unittest.TestCase):
         self.assertEqual(self.request("/api/amap/drive", method="POST", body=payload,
                                       headers=good)[0], 403)  # Live off!
 
+    def test_map_proxy_denied_when_not_authorized(self):
+        code, _, body = self.request("/_AMapService/v4/map/styles?key=FAKE")
+        self.assertEqual(code, 403)
+        self.assertNotIn(b"PRIVATE_TEST_SECURITY", body)
+
+    def test_optional_map_loader_is_local_asset(self):
+        code, headers, body = self.request("/amap_map.js")
+        self.assertEqual(code, 200)
+        self.assertIn(b"serviceHost", body)
+        self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
+
     def test_security_headers(self):
         _, headers, _ = self.request("/")
         self.assertIn("connect-src 'self'", headers["Content-Security-Policy"])

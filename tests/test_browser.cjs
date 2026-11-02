@@ -30,6 +30,12 @@ async function main() {
     const external=[];
     page.on('request', req=>{if(!req.url().startsWith(origin+'/'))external.push(req.url());});
     await page.goto(origin+'/',{waitUntil:'networkidle'});
+    assert.equal(await page.locator('.summary').count(),0,'no redundant statistics section');
+    assert.equal(await page.locator('.summary-tile').count(),0);
+    assert.equal(await page.locator('#stat-count, #stat-avg, #stat-congested').count(),0);
+    assert.equal(await page.locator('#route-count-pill').innerText(),'04');
+    const top = await page.locator('.route-card').first().boundingBox();
+    assert.ok(top && top.y < 390,'route cards should be prioritized above the fold');
     assert.equal(await page.locator('.route-card').count(),4);
     assert.match(await page.locator('.mock-flag').innerText(),/模拟模式/);
     assert.match(await page.locator('.intro').innerText(),/虚构模拟/);
@@ -74,7 +80,7 @@ async function main() {
     assert.equal(await page.locator('.route-card').count(),4);
     const width=await page.evaluate(()=>document.documentElement.scrollWidth);
     assert.ok(width<=390,'mobile view should not have horizontal overflow: '+width);
-    console.log('Browser E2E PASS: cards, labels, CRUD, XSS, persistence, pause, interval, mobile, zero external requests');
+    console.log('Browser E2E PASS: no summary cards, prioritized routes, cards, labels, CRUD, XSS, persistence, pause, interval, mobile, zero external requests');
   } finally {
     if(browser) await browser.close();
     child.kill();

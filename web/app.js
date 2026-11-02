@@ -99,12 +99,6 @@
       if (!state.measured[route.id]) sampleRoute(route);
       return {route:route, reading:state.measured[route.id]};
     });
-    document.getElementById('stat-count').textContent = String(data.length);
-    document.getElementById('stat-avg').textContent = data.length ?
-      String(Math.round(data.reduce(function (sum, x) {return sum+x.reading.data.duration;}, 0)/data.length)) : '—';
-    document.getElementById('stat-congested').textContent = String(data.filter(function (x) {
-      return x.reading.data.traffic === '拥堵' || x.reading.data.traffic === '严重拥堵';
-    }).length);
     document.getElementById('route-count-pill').textContent = String(data.length).padStart(2,'0');
     document.getElementById('add-route').disabled = data.length >= Core.LIMIT;
     if (!data.length) {

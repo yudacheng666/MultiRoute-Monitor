@@ -2,23 +2,37 @@
 
 更新：2026-11-02
 
-## GitHub 基线
-- 仓库：yudacheng666/MultiRoute-Monitor（Public）
-- 用户新建 main 初始 commit：df872495456eece3292f58db8cbc4758efa9d024
-- 当前工作分支：feat/m1a-local-simulation-board
-- 正式 main：只含初始 README；本阶段不得直接修改 main。
+## GitHub 基线与候选
+- Public 仓库：yudacheng666/MultiRoute-Monitor
+- main 初始 SHA：df872495456eece3292f58db8cbc4758efa9d024（尚未合并任何产品代码）
+- 开发分支：feat/m1a-local-simulation-board
+- Draft PR：[M1-A #1](https://github.com/yudacheng666/MultiRoute-Monitor/pull/1)，**未合并**
+- 后续真实高德计划：[M1-B Issue #2](https://github.com/yudacheng666/MultiRoute-Monitor/issues/2)
+- **经过 CI 验证的产品/测试准确 SHA**：424775dd7a4952f920c4a6d6cd2fa3216f4d3405
+- 本状态文件为测试完成后的 Markdown-only 记录；如分支新增文档提交，不得把其 SHA 冒称上面的受测产品 SHA。
 
-## 本阶段 M1-A
-候选：本地模拟多路线看板、路线管理、自动刷新和测试。模拟与真实数据须严格分离；尚未运行高德 API。准确产品 SHA、PR、CI 及环境测试结果应在候选提交后更新。
+## M1-A 代码已实现（模拟模式）
+- Python 标准库 HTTP 服务，仅 127.0.0.1，静态文件白名单、Host 检查、CSP、无写入 API。
+- 四个虚构示例小窗，模拟 ETA、延误、拥堵分段和**非地理**路线示意线。
+- 独立路线增/改/删、刷新单条/全部、10 分钟默认自动刷新、5/10/15/30 分钟选择、暂停与恢复。
+- 路线名称/端点和刷新偏好保存在当前浏览器 localStorage；无交通历史。
+- 始终可见模拟模式/非真实路况，既不访问外部 API，也没有 Key、CDN 或网络地图底图。
 
-## 未完成 / 阻塞
-- 用户真实 Windows 电脑 NOT TESTED / NOT DEPLOYED。
-- 用户高德 Web 服务 / JS Key NOT PROVIDED（不应提交）。
-- 个人非商用还是公司业务用途 UNCONFIRMED；真实高德调用不准启用。
-- 高德账户具体免费额度、按路况字段的接口等级、协议缓存限制未在本人账户实测。
-- 真实道路地图和真实拥堵 ETA NOT IMPLEMENTED。
+## 测试证据（精确产品 SHA 424775dd...）
+[GitHub Actions #41429604483](https://github.com/yudacheng666/MultiRoute-Monitor/actions/runs/41429604483)：**3/3 jobs SUCCESS**。
+- Ubuntu GitHub-hosted：Python 6/6 PASS；Node 6/6 PASS。
+- Windows GitHub-hosted：Python 6/6 PASS；Node 6/6 PASS。
+- Ubuntu 真 Chromium：单条浏览器 E2E 流程 PASS（四卡、多次刷新、XSS 文本安全、本地路由增/改/删、刷新持久性、调整间隔、暂停恢复、390px 窄屏无横向溢出、无外网请求）。
+- 2026-11-02 通过 GitHub 作业日志复核，以上结果不外推至真实高德接口。
+
+## 未测试 / 未交付 / 阻塞
+- **真实高德地图、道路路线、实时交通 ETA/TMC：NOT IMPLEMENTED / NOT TESTED**。
+- **用户自己的 Windows 电脑安装/实测：NOT TESTED / NOT DEPLOYED**（CI Windows Runner 不等于公司/个人电脑）。
+- 浏览器 5/10 分钟真实定时器长周期计时精度：NOT TESTED；小窗上限 6 的整条 UI E2E 路径尚未专项覆盖（核心边界逻辑有代码与部分单元验证）。
+- 高德账户 Key、免费配额、QPS、用途授权以及数据服务合规尚未从用户账号验证。
+- 未联系真实个人地理位置；没有公开或保存真实路线。
 
 ## 下一步
-1. 本分支实现并测试 M1-A；通过 GitHub PR 的自动化验证。
-2. 用户审阅真实浏览器视觉及 M1-A 功能，审核合并。
-3. 个人非商用授权或相关服务许可确认后，单独 M1-B 分支探测高德实时接口与额度。
+1. 用户在本机从当前分支的 README 启动模拟页面，体验 4 条小窗并反馈 UI；必要时只补 UI 差异定向测试，不重复相同 SHA 的全量 CI。
+2. 用户明确批准后，才能将 Draft PR 改为可合并并完成 main 正式合并；代码合并不等于本机升级。
+3. M1-B 严格根据 Issue #2 的授权/零费用/Key 安全门槛启动单独分支，不在 M1-A 中偷偷启用任何真实调用。

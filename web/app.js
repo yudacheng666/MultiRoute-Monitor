@@ -271,10 +271,12 @@
     if (!node||!btn||btn.disabled) return;
     btn.disabled=true;btn.textContent='地图加载中…';
     try {
-      await window.AMapMap.show(node,live.segments,state.mapKey);
       node.classList.add('mapbox-active');
+      await window.AMapMap.show(node,live.segments,state.mapKey);
       btn.textContent='高德地图已加载';
     } catch(_) {
+      node.classList.remove('mapbox-active');
+      node.innerHTML=drawRealGeometry(live);
       btn.disabled=false;btn.textContent='重试地图';
       showToast('地图加载失败，已保留道路示意线；不影响模拟模式');
     }

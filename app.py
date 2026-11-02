@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from amap_client import Disabled, LiveGateway, ProviderError, RateLimited, RouteInputError
+from map_proxy import PREFIX as MAP_PREFIX, prepare_proxy_path, proxy_get
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -17,11 +18,23 @@ ASSETS = {
     "/style.css": (WEB / "style.css", "text/css; charset=utf-8"),
     "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
     "/core.js": (WEB / "core.js", "text/javascript; charset=utf-8"),
+    "/amap_map.js": (WEB / "amap_map.js", "text/javascript; charset=utf-8"),
 }
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; "
        "img-src 'self' data:; connect-src 'self'; base-uri 'none'; "
        "form-action 'self'; frame-ancestors 'none'; object-src 'none'")
 
+
+# The AMap runtime is never loaded without explicit opt-in. When enabled, permit
+# its JS/tiles/worker domains without allowing arbitrary external scripts.
+MAP_CSP = ("default-src 'none'; "
+           "script-src 'self' https://webapi.amap.com https://*.amap.com https://*.autonavi.com; "
+           "style-src 'self' 'unsafe-inline' https://*.amap.com; "
+           "img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; "
+           "connect-src 'self' https://*.amap.com https://*.autonavi.com; "
+           "font-src 'self' data: https://*.amap.com; "
+           "worker-src blob:; base-uri 'none'; form-action 'self'; "
+           "frame-ancestors 'none'; object-src 'none'")
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "MultiRouteMonitor/0.2"
@@ -34,7 +47,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("Content-Security-Policy", MAP_CSP if self.server.gateway.map_enabled() else CSP)
         self.end_headers()
 
     def _send(self, status, body, mime="text/plain; charset=utf-8", head=False):
@@ -66,6 +79,33 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 result = status
             self._json(200, result, head)
+            return
+        if path.startswith(MAP_PREFIX):
+            if head:
+                self._send(405, b"Not allowed", head=head)
+                return
+            if not self.server.gateway.map_enabled():
+                self._send(403, b"Map not enabled")
+                return
+            # Refuse cross-site browser requests to a local trusted proxy.
+            if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+                self._send(403, b"Cross-site denied")
+                return
+            try:
+                upstream = prepare_proxy_path(self.path, self.server.gateway.js_security)
+            except (ValueError, Disabled):
+                self._send(400, b"Map proxy request rejected")
+                return
+            try:
+                self.server.gateway.reserve_map_proxy()
+                body, mime = proxy_get(upstream)
+            except RateLimited:
+                self._send(429, b"Map budget exceeded")
+                return
+            except (Disabled, ProviderError):
+                self._send(502, b"Map request unavailable")
+                return
+            self._send(200, body, mime)
             return
         asset = ASSETS.get(path)
         if asset is None:

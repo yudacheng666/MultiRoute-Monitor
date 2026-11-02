@@ -14,7 +14,8 @@
   const CLASS = { '畅通': 'clear', '缓行': 'slow', '拥堵': 'busy', '严重拥堵': 'heavy' };
   const state = { routes: [], measured: {}, interval: 10, paused: false, timer: null,
     nextAt: null, editing: null, toastTimer: null,
-    liveReady: false, liveReadings: {}, liveErrors: {}, liveLoading: {} };
+    liveReady: false, liveReadings: {}, liveErrors: {}, liveLoading: {},
+    mapEnabled: false, mapKey: null };
 
   function escapeHTML(value) {
     return String(value).replace(/[&<>"']/g, function (x) {
@@ -161,6 +162,8 @@
       const realButton = state.liveReady && r.origin_coord && r.destination_coord ?
         '<button type="button" data-action="real" data-id="'+id+'"'+(state.liveLoading[r.id]?' disabled':'')+
         ' aria-label="高德手动查询'+name+'">'+(state.liveLoading[r.id]?'查询中…':'高德查询')+'</button>' : '';
+      const mapButton = state.mapEnabled && live ?
+        '<button type="button" data-action="map" data-id="'+id+'" aria-label="加载高德地图'+name+'">查看高德地图</button>' : '';
       const errorNote = state.liveErrors[r.id] ? '<div class="live-error">'+escapeHTML(state.liveErrors[r.id])+'</div>':'';
       const chart = live ? drawRealGeometry(live) : drawSchematic(r,m);
       const eta = live ? live.eta_minutes : m.duration;
@@ -179,10 +182,11 @@
         '<div class="schematic '+(live?'real-geometry':'')+'">' + chart + '</div>' +
         '<div class="card-bottom"><span><span class="sim-chip">'+(live?'AMAP':'MOCK')+'</span>' +
         (live?'手动查询 '+escapeHTML(live.fetched_at||'（时间未知）'):'模拟刷新 '+formatTime(reading.at))+'</span>' +
-        '<div class="card-buttons">'+realButton+
+        '<div class="card-buttons">'+mapButton+realButton+
         '<button type="button" data-action="refresh" data-id="' + id + '" aria-label="刷新' + name + '">↻ 模拟刷新</button></div></div>' +
         errorNote+'</article>';
     }).join('');
+    if (window.AMapMap) window.AMapMap.destroyDetached();
   }
   function ticker() {
     document.getElementById('clock').textContent = formatTime(new Date());
@@ -255,6 +259,26 @@
       formError.hidden = false;
     }
   }
+  async function openMap(route) {
+    if (!state.mapEnabled || !state.mapKey || !window.AMapMap) return;
+    const live=state.liveReadings[route.id];
+    if (!live) return;
+    const card=Array.from(routeGrid.querySelectorAll('.route-card')).find(
+      function(el){return el.getAttribute('data-id')===route.id;});
+    if (!card) return;
+    const node=card.querySelector('.schematic');
+    const btn=card.querySelector('button[data-action="map"]');
+    if (!node||!btn||btn.disabled) return;
+    btn.disabled=true;btn.textContent='地图加载中…';
+    try {
+      await window.AMapMap.show(node,live.segments,state.mapKey);
+      node.classList.add('mapbox-active');
+      btn.textContent='高德地图已加载';
+    } catch(_) {
+      btn.disabled=false;btn.textContent='重试地图';
+      showToast('地图加载失败，已保留道路示意线；不影响模拟模式');
+    }
+  }
   function handleCardClick(event) {
     const btn = event.target.closest('button[data-action]');
     if (!btn) return;
@@ -264,6 +288,7 @@
     const action = btn.getAttribute('data-action');
     if (action === 'refresh') refreshSingle(id);
     if (action === 'real') requestReal(id);
+    if (action === 'map') openMap(r);
     if (action === 'edit') openDialog(r);
     if (action === 'delete') {
       if (!window.confirm('确认删除模拟路线「' + r.name + '」？')) return;
@@ -282,10 +307,12 @@
       return r.json();
     }).then(function(x) {
       state.liveReady = x.live_enabled === true;
+      state.mapEnabled = state.liveReady && x.js_map_enabled === true;
+      state.mapKey = state.mapEnabled ? x.js_map_key : null;
       const label=document.getElementById('amap-status');
       label.textContent=state.liveReady ?
         ('高德真实接口已授权 · 仅手动查询 · 本程序剩余额度 '+x.remaining_app_budget+
-         ' 次 · 未查询路线仍为模拟') :
+         ' 次 · 未查询路线仍为模拟' + (state.mapEnabled?' · 地图需手动打开':'')) :
         '高德实时接口：未授权启用 · 当前仅显示模拟数据';
       if(state.liveReady) {
         document.querySelector('.mock-flag').textContent='高德接入已就绪 · 未查询路线为模拟';

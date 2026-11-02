@@ -187,6 +187,9 @@ class LiveGateway:
     def __init__(self, root, env=None, transport=None, clock=None):
         env = os.environ if env is None else env
         self.key = env.get("MRM_AMAP_WEB_KEY", "")
+        self.js_key = env.get("MRM_AMAP_JS_KEY", "")
+        self.js_security = env.get("MRM_AMAP_JS_SECURITY", "")
+        self.map_explicit = env.get("MRM_AMAP_MAP_OPT_IN") == "YES"
         self.authorized = (env.get("MRM_USAGE_AUTHORIZED") == "YES"
                            and env.get("MRM_FREE_QUOTA_VERIFIED") == "YES"
                            and env.get("MRM_EXPLICIT_LIVE_OPT_IN") == "YES")
@@ -197,6 +200,8 @@ class LiveGateway:
         self._last_global = 0.0
         self._last_route = {}
         self.usage_file = Path(root) / "local" / "amap_request_attempts.json"
+        self.map_usage_file = Path(root) / "local" / "amap_map_proxy_attempts.json"
+        self.map_cap = 500
         # Never allow the app to consume the entire provider's published quota.
         try:
             requested = int(env.get("MRM_DAILY_REQUEST_CAP", "100"))
@@ -209,11 +214,15 @@ class LiveGateway:
     def _day(self):
         return datetime.now(CHINA_TZ).date().isoformat()
 
-    def _usage(self):
-        if not self.usage_file.exists():
+    def _usage(self, path=None):
+        path = self.usage_file if path is None else path
+        return self._read_usage(path)
+
+    def _read_usage(self, path):
+        if not path.exists():
             return {"day": self._day(), "count": 0}
         try:
-            data = json.loads(self.usage_file.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(data, dict) or not isinstance(data.get("count"), int) or data["count"] < 0:
                 raise ValueError()
             if data.get("day") == self._day():
@@ -225,15 +234,29 @@ class LiveGateway:
         except (OSError, ValueError) as exc:
             raise Disabled("本地配额计数异常，已停止真实调用") from exc
 
-    def _reserve(self, usage):
-        self.usage_file.parent.mkdir(parents=True, exist_ok=True)
-        pending = self.usage_file.with_suffix(".tmp")
+    def _reserve(self, usage, path=None):
+        path = self.usage_file if path is None else path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pending = path.with_suffix(".tmp")
         try:
             pending.write_text(json.dumps({"day": self._day(), "count": usage["count"] + 1}),
                                encoding="utf-8")
-            os.replace(pending, self.usage_file)
+            os.replace(pending, path)
         except OSError as exc:
             raise Disabled("无法持久化请求计数，已停止真实调用") from exc
+
+    def map_enabled(self):
+        return bool(self.enabled and self.map_explicit and
+                    self.js_key and self.js_security)
+
+    def reserve_map_proxy(self):
+        if not self.map_enabled():
+            raise Disabled("地图组件尚未授权启用")
+        with self._lock:
+            usage = self._usage(self.map_usage_file)
+            if usage["count"] >= self.map_cap:
+                raise RateLimited("地图服务代理请求达到本机硬上限")
+            self._reserve(usage, self.map_usage_file)
 
     def status(self):
         with self._lock:
@@ -246,7 +269,9 @@ class LiveGateway:
                     "daily_request_cap": self.cap,
                     "remaining_app_budget": remaining,
                     "requires_verified_authorization": True,
-                    "js_map_enabled": False}
+                    "js_map_enabled": self.map_enabled(),
+                    "js_map_key": self.js_key if self.map_enabled() else None,
+                    "remaining_map_proxy_budget": max(0, self.map_cap - self._usage(self.map_usage_file)["count"]) if self.map_enabled() else 0}
 
     def drive(self, data):
         # Permission check must come before validation and any network activity.

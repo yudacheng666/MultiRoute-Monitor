@@ -8,7 +8,8 @@
 - 开发分支：feat/m1a-local-simulation-board
 - Draft PR：[M1-A #1](https://github.com/yudacheng666/MultiRoute-Monitor/pull/1)，**未合并**
 - 后续真实高德计划：[M1-B Issue #2](https://github.com/yudacheng666/MultiRoute-Monitor/issues/2)
-- **经过 CI 验证的产品/测试准确 SHA**：424775dd7a4952f920c4a6d6cd2fa3216f4d3405
+- **当前经过 CI 验证的产品/测试准确 SHA**：70a12033f36d652bde9e8fbd68eaaafde1a12fc6（默认端口改为 8876）
+- 早期基线 CI SHA：424775dd7a4952f920c4a6d6cd2fa3216f4d3405，详见下方历史证据
 - 本状态文件为测试完成后的 Markdown-only 记录；如分支新增文档提交，不得把其 SHA 冒称上面的受测产品 SHA。
 
 ## M1-A 代码已实现（模拟模式）
@@ -34,8 +35,10 @@
 
 ## 端口冲突修正（2026-11-02）
 - 用户报告 8765 是 SRM 端口，不能给 MultiRoute-Monitor 默认使用。
-- 本候选后续修正默认端口为 8876，文档与回归测试同步更新；`python app.py --port 8876` 对先前下载版本同样有效。
-- 修正提交需要基于**新 SHA** 重新验收受影响的 Python 部分，原 CI `424775dd...` PASS 不能直接证明端口修改通过。
+- 修正默认端口为 8876，文档与回归测试同步更新；`python app.py --port 8876` 对先前下载版本同样有效。
+- 修正产品 SHA：`70a12033f36d652bde9e8fbd68eaaafde1a12fc6`。
+- [GitHub Actions #41448185794](https://github.com/yudacheng666/MultiRoute-Monitor/actions/runs/41448185794)：**3/3 SUCCESS**。Windows Python 7 PASS + Node 6 PASS；Ubuntu Python 7 PASS + Node 6 PASS；Ubuntu 真 Chromium E2E PASS。
+- 此修正的测试已在精确产品 SHA `70a12033...` 完成，不能把不同 SHA 的旧 PASS 当作新提交证据。
 - 用户 Windows 本机 8876 是否空闲及启动结果：NOT TESTED。
 
 ## 下一步

@@ -8,7 +8,7 @@
 - 开发分支：feat/m1a-local-simulation-board
 - Draft PR：[M1-A #1](https://github.com/yudacheng666/MultiRoute-Monitor/pull/1)，**未合并**
 - 后续真实高德计划：[M1-B Issue #2](https://github.com/yudacheng666/MultiRoute-Monitor/issues/2)
-- **当前经过 CI 验证的产品/测试准确 SHA**：70a12033f36d652bde9e8fbd68eaaafde1a12fc6（默认端口改为 8876）
+- **当前经过 CI 验证的产品/测试准确 SHA**：b2a68c794f0057dfa2779f897242670b314b525a（删除四项无用统计）
 - 早期基线 CI SHA：424775dd7a4952f920c4a6d6cd2fa3216f4d3405，详见下方历史证据
 - 本状态文件为测试完成后的 Markdown-only 记录；如分支新增文档提交，不得把其 SHA 冒称上面的受测产品 SHA。
 
@@ -46,8 +46,9 @@
 2. 用户明确批准后，才能将 Draft PR 改为可合并并完成 main 正式合并；代码合并不等于本机升级。
 3. M1-B 严格根据 Issue #2 的授权/零费用/Key 安全门槛启动单独分支，不在 M1-A 中偷偷启用任何真实调用。
 
-## M1-A UI 用户反馈待验证调整（2026-11-02）
+## M1-A UI 用户反馈与修正（2026-11-02）
 - 用户已在 Windows 8876 打开页面，并指出顶部四项统计标签没有使用意义。
 - 取消四项统计汇总卡片及对应运算，保留路线数量（标题角标）、模拟标识、刷新操作及每路线独立时间/路况。
-- 新增浏览器定向 E2E：统计卡片不存在、路线数量角标仍正确、路线卡片首屏可见；待 CI 在本次代码 SHA 执行，不借用旧 PASS。
-- 本次仅 UI 小改，不影响 SRM 8765、不改变模拟/真实接口隔离；用户新版本 Windows 8876 实机复核：NOT TESTED。
+- 新增浏览器定向 E2E：统计卡片不存在、路线数量角标仍正确、路线卡片首屏可见。
+- [GitHub Actions #41449541037](https://github.com/yudacheng666/MultiRoute-Monitor/actions/runs/41449541037) 在产品/测试 SHA `b2a68c794f0057dfa2779f897242670b314b525a` **3/3 SUCCESS**：Windows Python 7 PASS + Node 6 PASS；Ubuntu Python 7 PASS + Node 6 PASS；Ubuntu 真 Chromium E2E PASS（新增无统计卡片与卡片首屏可见断言）。
+- 本次仅 UI 小改，不影响 SRM 8765、不改变模拟/真实接口隔离；用户新版 UI 在 Windows 8876 实机复核：NOT TESTED（先前仅确认能够打开旧版页面）。

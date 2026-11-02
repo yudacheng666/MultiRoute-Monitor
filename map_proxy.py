@@ -23,7 +23,7 @@ def prepare_proxy_path(target, security_code):
     if not isinstance(security_code, str) or not security_code or len(security_code) > 256:
         raise Disabled("高德地图安全码未配置")
     url = urlsplit(target)
-    if not url.path.startswith(PREFIX) or len(target) > 1800:
+    if url.scheme or url.netloc or url.fragment or not url.path.startswith(PREFIX) or len(target) > 1800:
         raise ValueError("路径不在地图代理白名单内")
     path = url.path[len(PREFIX)-1:]
     if not any(pattern.fullmatch(path) for pattern in ALLOWED):

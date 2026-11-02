@@ -1,0 +1,48 @@
+name: M1-A tests
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+permissions:
+  contents: read
+jobs:
+  unit:
+    name: Python and Node (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python stdlib HTTP integration
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Node mock model
+        run: node --test tests/test_core.cjs
+  browser:
+    name: Real Chromium E2E (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install free test-only browser tooling
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run real local server and browser assertions
+        run: node tests/test_browser.cjs

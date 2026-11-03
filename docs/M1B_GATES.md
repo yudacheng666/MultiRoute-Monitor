@@ -16,6 +16,11 @@
 5. 高德 JS API 2.0 正式底图及安全密钥服务端代理的**候选代码已实现**，但仍未用真实 Key 在Windows实测或核实全部地图资源可用性；地图自带的版权标识不得遮盖，按需加载需符合协议。
 6. 用户本人在本地设置 Web Key，不发送给聊天机器人、GitHub 仓库或测试报告。CI 不使用真实 Key，不访问高德。
 
+## 用户仅需完成的安全密钥本地配置
+- 在高德“Web端（JS API）” Key 对应记录中找到 securityJsCode 安全密钥（与 JS Key 配对，不是第三个 Key）。
+- 下载候选 ZIP 后在项目目录运行 `python setup_amap.py`，按提示输入两枚已有 Key 和该安全密钥。无需安装 Nginx，程序自身包含后端代理。不把 Key 发到聊天。
+- 脚本保存文件不会开启实时调用；须经许可、免费额度与收费风险确认后，才由本人对真实模式作独立授权。
+
 ## 当前候选安全控制
 - 默认全部关闭；同时具备四项条件才会启用：MRM_AMAP_WEB_KEY、MRM_USAGE_AUTHORIZED=YES、MRM_FREE_QUOTA_VERIFIED=YES、MRM_EXPLICIT_LIVE_OPT_IN=YES。
 - 只监听127.0.0.1，默认端口8876；POST 本机同源 Origin + JSON + 自定义请求头，阻止普通跨站发请求。

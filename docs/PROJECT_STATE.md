@@ -52,3 +52,10 @@
 - 新增零外网单元测试，通过 fake HTTPS 检查实际选取的上游域名、HTTPS 参数和无效 URL 提前拒绝。
 - 最新提交和 CI 准确 SHA 需以 GitHub Actions 运行记录为准；仍未使用真实高德 Key 或验证实际高德地图。
 - PR #3 仍为 Draft；main 不变，不部署到用户 Windows。
+
+## 2026-11-03 用户反馈后操作简化
+- 用户明确已经创建两个 Key，要求服务器代理由项目开发者实现，用户无需理解/维护 Nginx。
+- 已开发 `python setup_amap.py` 本地交互向导：只输入 Web服务 Key、JS API Key 和 JS安全密钥（不是第三个 Key），隐藏终端输入，存放 `local/amap_keys.json`（仓库忽略）。
+- Python 网关现在可在正常启动时读取本地私有文件；单元测试注入独立环境不会读取真实密钥。配置文件不会写任何许可或真实调用开启标志，**输入 Key 后仍完全模拟，不产生网络请求**。
+- 地图安全码代理前次已开发，当前官网示例要求样式走 webapi.amap.com、其他服务走 restapi.amap.com，代码采用固定双域名且不接受用户指定任意上游。
+- 该新一轮 PR 产品 SHA 和 CI 结果待按 GitHub 实际执行核验。PR #3 保持 Draft，main 仍 M1-A；用户本人需要的下一操作仅在发布 ZIP 后运行 Key 配置向导。

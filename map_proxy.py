@@ -11,12 +11,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 from amap_client import Disabled, ProviderError
 
 PREFIX = "/_AMapService/"
-UPSTREAM = "restapi.amap.com"
+WEB_SERVICE_UPSTREAM = "restapi.amap.com"
+STYLE_UPSTREAM = "webapi.amap.com"
 # Restrict outgoing endpoints instead of creating an arbitrary forwarding proxy.
-ALLOWED = (
-    re.compile(r"^/v3/(?:assistant|place|geocode|direction|distance|config)/[a-zA-Z0-9/_-]{1,120}$"),
-    re.compile(r"^/v4/map/styles(?:/[a-zA-Z0-9/_-]{1,120})?$"),
-)
+WEB_SERVICE_PATH = re.compile(r"^/v3/(?:assistant|place|geocode|direction|distance|config)/[a-zA-Z0-9/_-]{1,120}$")
+STYLE_PATH = re.compile(r"^/v4/map/styles(?:/[a-zA-Z0-9/_-]{1,120})?$")
+ALLOWED = (WEB_SERVICE_PATH, STYLE_PATH)
 MAX_BYTES = 1_000_000
 
 def prepare_proxy_path(target, security_code):
@@ -33,9 +33,25 @@ def prepare_proxy_path(target, security_code):
         raise ValueError("地图代理参数不允许")
     return path + "?" + urlencode(pairs + [("jscode", security_code)])
 
+def select_upstream(upstream_path):
+    """Select only one of two documented AMap hosts; never trust a URL host."""
+    if not isinstance(upstream_path, str):
+        raise ValueError("上游路径无效")
+    parts = urlsplit(upstream_path)
+    if parts.scheme or parts.netloc or parts.fragment:
+        raise ValueError("不接受外部绝对地址")
+    if STYLE_PATH.fullmatch(parts.path):
+        return STYLE_UPSTREAM
+    if WEB_SERVICE_PATH.fullmatch(parts.path):
+        return WEB_SERVICE_UPSTREAM
+    raise ValueError("上游资源不在白名单内")
+
+
 def proxy_get(upstream_path):
-    # The host is fixed. No redirects, no private IPs, no caller-defined URL.
-    conn = http.client.HTTPSConnection(UPSTREAM, timeout=8)
+    # Map styles use webapi.amap.com; supported Web Service uses restapi.amap.com.
+    # Exact fixed-host selection is validated again here, even if called directly.
+    host = select_upstream(upstream_path)
+    conn = http.client.HTTPSConnection(host, timeout=8)
     try:
         conn.request("GET", upstream_path, headers={
             "Accept": "*/*", "Accept-Encoding": "identity"

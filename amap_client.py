@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlencode
+from setup_amap import read_private_keys
 CHINA_TZ = timezone(timedelta(hours=8))
 
 ENDPOINT = "restapi.amap.com"
@@ -185,7 +186,10 @@ def fixed_host_fetch(path):
 
 class LiveGateway:
     def __init__(self, root, env=None, transport=None, clock=None):
-        env = os.environ if env is None else env
+        # Only normal local startup reads private keys. Offline tests injecting env={}
+        # never see machine credentials. Permission/fee switches remain separate.
+        if env is None:
+            env = {**read_private_keys(root), **os.environ}
         self.key = env.get("MRM_AMAP_WEB_KEY", "")
         self.js_key = env.get("MRM_AMAP_JS_KEY", "")
         self.js_security = env.get("MRM_AMAP_JS_SECURITY", "")

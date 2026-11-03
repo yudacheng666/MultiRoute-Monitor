@@ -80,7 +80,45 @@ async function main() {
     assert.equal(await page.locator('.route-card').count(),4);
     const width=await page.evaluate(()=>document.documentElement.scrollWidth);
     assert.ok(width<=390,'mobile view should not have horizontal overflow: '+width);
-    console.log('Browser E2E PASS: no summary cards, prioritized routes, cards, labels, CRUD, XSS, persistence, pause, interval, mobile, zero external requests');
+    // Intercept browser traffic in local Chromium: never contact the real provider.
+    const localLive=await browser.newPage({viewport:{width:1440,height:900}});
+    let realCalls=0;
+    await localLive.route('**/api/amap/status',r=>r.fulfill({
+      status:200,contentType:'application/json',
+      body:JSON.stringify({live_enabled:true,mode:'live_ready',remaining_app_budget:3})
+    }));
+    await localLive.route('**/api/amap/drive',r=>{
+      realCalls+=1;
+      const req=r.request().postDataJSON();
+      assert.equal(req.origin,'116.1,39.9');
+      assert.equal(req.destination,'116.2,39.91');
+      return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+        source:'AMAP',eta_minutes:23,distance_km:12.5,traffic_available:true,
+        fetched_at:'2026-11-02T21:00:00+08:00',
+        segments:[
+          {status:'畅通',points:[[116.1,39.9],[116.15,39.905]]},
+          {status:'拥堵',points:[[116.15,39.905],[116.2,39.91]]}
+        ]
+      })});
+    });
+    await localLive.goto(origin+'/',{waitUntil:'networkidle'});
+    assert.equal(realCalls,0,'no automatic real queries even if backend is enabled');
+    await localLive.getByRole('button',{name:'编辑示例路线 A'}).click();
+    await localLive.locator('[name=origin_coord]').fill('116.1,39.9');
+    await localLive.locator('[name=destination_coord]').fill('116.2,39.91');
+    await localLive.locator('#dialog-save').click();
+    await localLive.getByRole('button',{name:'高德手动查询示例路线 A'}).click();
+    await localLive.locator('.route-card').first().locator('.sim-chip').getByText('AMAP').waitFor();
+    const first=await localLive.locator('.route-card').first().innerText();
+    assert.match(first,/23/);
+    assert.match(first,/12.5 公里/);
+    assert.match(first,/高德（单次查询）/);
+    assert.equal(await localLive.locator('.route-card').first().locator('.real-geometry polyline').count(),2);
+    assert.equal(realCalls,1);
+    assert.equal(await localLive.locator('.route-card').nth(1).locator('.sim-chip').innerText(),'MOCK');
+    await localLive.close();
+
+    console.log('Browser E2E PASS: gated AMap HTTP fixture, no summary cards, prioritized routes, cards, labels, CRUD, XSS, persistence, pause, interval, mobile, zero external requests');
   } finally {
     if(browser) await browser.close();
     child.kill();

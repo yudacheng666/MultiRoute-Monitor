@@ -94,6 +94,16 @@ class LocalAuthorizationTests(unittest.TestCase):
             self.assertEqual(flags["MRM_USAGE_AUTHORIZED"],"NO")
             self.assertEqual(flags["MRM_EXPLICIT_LIVE_OPT_IN"],"NO")
 
+    def test_tampered_budget_caps_fail_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            record=save_private_authorization(root,self.payload())
+            record["route_monthly_cap"]=30000
+            record["route_daily_cap"]=1000
+            # Reported remaining quota was 150,000, so a 30,000 cap is valid.
+            record["route_quota_remaining_at_enable"]=100
+            authorization_path(root).write_text(json.dumps(record))
+            self.assertEqual(read_private_authorization(root)["MRM_USAGE_AUTHORIZED"],"NO")
+
     def test_disable_marker_overrides_authorization_and_can_be_reenabled(self):
         with tempfile.TemporaryDirectory() as root:
             save_private_authorization(root,self.payload())

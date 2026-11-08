@@ -157,11 +157,11 @@ def disable_private_authorization(root):
 def read_private_authorization(root):
     """Return only validated runtime switches; never return ticket/quota metadata."""
     target = authorization_path(root)
+    if target.is_symlink():
+        return dict(AUTH_FLAGS_DISABLED)
     if not target.exists():
         return {}
     try:
-        if target.is_symlink():
-            return dict(AUTH_FLAGS_DISABLED)
         data = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
         return dict(AUTH_FLAGS_DISABLED)
@@ -172,14 +172,20 @@ def read_private_authorization(root):
     ticket = data.get("ticket_id")
     route_daily, route_monthly = data.get("route_daily_cap"), data.get("route_monthly_cap")
     map_daily, map_monthly = data.get("map_daily_cap"), data.get("map_monthly_cap")
+    route_remaining = data.get("route_quota_remaining_at_enable")
+    map_remaining = data.get("map_quota_remaining_at_enable")
+    numeric = (route_daily, route_monthly, map_daily, map_monthly,
+               route_remaining, map_remaining)
     if (data.get("enabled") is not True
             or not isinstance(ticket, str) or not AUTH_TICKET_PATTERN.fullmatch(ticket)
             or any(data.get(field) is not True for field in (
                 "personal_developer_verified", "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"))
-            or not all(isinstance(v, int) and not isinstance(v, bool) and v > 0
-                       for v in (route_daily, route_monthly, map_daily, map_monthly))
-            or route_daily > 1000 or route_monthly > 30000
-            or map_daily > 30 or map_monthly > 900):
+            or not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in numeric)
+            or route_remaining > 100000000 or map_remaining > 100000000
+            or route_monthly != min(30000, route_remaining // 2)
+            or map_monthly != min(900, map_remaining // 2)
+            or route_daily != min(1000, max(1, route_monthly // 30))
+            or map_daily != min(30, max(1, map_monthly // 30))):
         return dict(AUTH_FLAGS_DISABLED)
     return {
         "MRM_USAGE_AUTHORIZED": "YES",

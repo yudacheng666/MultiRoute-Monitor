@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -253,13 +255,17 @@ def make_server(port=8876, gateway=None, root=ROOT):
 def main():
     parser = argparse.ArgumentParser(description="Local-only MultiRoute-Monitor server")
     parser.add_argument("--port", type=int, default=8876)
+    parser.add_argument("--open-browser", action="store_true",
+                        help="open the local dashboard after startup")
     args = parser.parse_args()
     with make_server(args.port) as server:
         enabled = server.gateway.status()["live_enabled"]
-        print("http://127.0.0.1:%s/ · %s" %
-              (server.server_port, "高德候选（已授权）" if enabled else "模拟模式（默认，非真实路况）"),
+        url = "http://127.0.0.1:%s/" % server.server_port
+        print(url + " · " + ("高德候选（已授权）" if enabled else "模拟模式（默认，非真实路况）"),
               flush=True)
         print("按 Ctrl+C 停止", flush=True)
+        if args.open_browser:
+            threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         try:
             server.serve_forever(poll_interval=0.2)
         except KeyboardInterrupt:

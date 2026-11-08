@@ -69,3 +69,13 @@
 - 受测产品 SHA：5a192a4dba94e4e92a1e4b7ca40dd93e1d0b7e19。Actions #42450312426 3/3 SUCCESS：Windows 45 Python tests + 10 Node tests；Ubuntu 45 Python tests + 10 Node tests；Ubuntu 24.04 Chromium E2E PASS。
 - 该轮前两个迭代 CI 捕获并修复了测试夹具 Content-Length 行为和旧路径白名单断言，最终 SHA 全绿。CI 全程使用虚构响应和 mock HTTPS，不触发真实高德请求。
 - main 仍为 bb8287f040ae6e5e83709275e5daf28e4ff4bae9（M1-A），PR #3 仍 Draft / unmerged。真实高德账号、许可、地图底图及真实 ETA/TMC 仍未实测；不得把离线 CI PASS 说成真实地图上线。
+
+
+## 最新状态覆盖（2026-11-08，优先于上述历史记录）
+- M1-B 已包含官方高德 JS API 2.0 按需加载器、固定上游安全密钥代理、本地 Key 向导及实际 HTTP server 集成测试；并非“未实现”。
+- 最终受测产品/测试 SHA：27622cd87e425f312992b7e7b70ba28e978f7389。
+- [GitHub Actions #42450447909](https://github.com/yudacheng666/MultiRoute-Monitor/actions/runs/42450447909)：3/3 SUCCESS。Windows 45/45 Python + 11/11 Node；Ubuntu 45/45 Python + 11/11 Node；Ubuntu 24.04 Chromium E2E PASS。
+- 本轮覆盖安全代理通过真实本地 HTTP handler 的路由、两类上游路径选择、后端 jscode 注入、跨站拒绝、非法路径、请求预算、上游失败、响应大小/MIME/重定向，以及浏览器加载 JS API 前设置 same-origin serviceHost。所有上游均 mock，未访问高德。
+- 最终包可从 M1-B 分支 ZIP 下载。用户已在旧文件夹配置 local/amap_keys.json；ZIP 不包含此私密文件，更新时应保留原 local 文件夹/配置。
+- 当前唯一尚未完成的是真实高德在线验证：个人“研究学习”许可是否适用、账户实际免费配额与超额停止机制、真实地图底图和真实路线/TMC 返回。不能在 CI 使用用户密钥，也不能在授权/零费用机制未确认时自动启用。
+- PR #3 仍 Draft / 未合并；main 仍为 M1-A SHA bb8287f040ae6e5e83709275e5daf28e4ff4bae9。用户尚未批准 M1-B 合并。

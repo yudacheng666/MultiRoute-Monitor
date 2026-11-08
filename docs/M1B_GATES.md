@@ -45,3 +45,12 @@
 - /_AMapService/ 请求仅 GET；本机 host 校验、Sec-Fetch-Site 跨站阻断、代理调用日上限、服务端注入 jscode、不跟随重定向、8秒超时、响应 1MB 上限和 MIME 白名单。
 - 代理的完整 HTTP 路由测试使用假网关和 mock 上游，不会触发真实请求。真实地图资源/版权/Key域名白名单尚未验收。
 - CI SHA 5a192a4dba94e4e92a1e4b7ca40dd93e1d0b7e19：Windows/Ubuntu Python 45/45 + Node 10/10，Chromium E2E 通过；Actions #42450312426 3/3 SUCCESS。
+
+
+## 最新离线验收状态（2026-11-08，覆盖历史测试记录）
+- 最终测试 SHA：27622cd87e425f312992b7e7b70ba28e978f7389。
+- Actions #42450447909 3/3 SUCCESS：Windows Python 45/45、Node 11/11；Ubuntu Python 45/45、Node 11/11；Ubuntu 24.04 Chromium E2E PASS。
+- 已完成真实本机 HTTP handler 集成测试（mock transport）：官方样式路由至 webapi.amap.com，其他 /v3 与 /v4 Web Service 路径路由至 restapi.amap.com；服务端追加 jscode，不向浏览器返回安全密钥；测试跨站/非法路径/超预算/上游失败/HEAD 拒绝。
+- 已完成响应保护测试：固定 HTTPS 主机、禁止重定向、8 秒超时、1 MB body/Content-Length 上限、MIME 白名单。
+- 已验证前端在添加高德 JS API 脚本之前设置 same-origin serviceHost，浏览器配置不含 securityJsCode。
+- 以上均为离线测试/虚构响应；**不代表真实高德地图加载、实际账户权限、许可、配额或真实 ETA/TMC 已通过**。

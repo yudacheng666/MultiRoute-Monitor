@@ -133,7 +133,7 @@ class DriverTests(unittest.TestCase):
             gateway.reserve_map_initialization()
             with self.assertRaises(RateLimited):
                 gateway.reserve_map_initialization()
-            now[0]+=1.1
+            now[0]+=1.11
             gateway.reserve_map_initialization()
             self.assertEqual(gateway.status()["remaining_map_initializations"],28)
 

@@ -165,7 +165,7 @@ def parse_driving(payload):
         for tmc in tmcs[:500]:
             if not isinstance(tmc, dict):
                 continue
-            geom = parse_polyline(tmc.get("tmc_polyline"))
+            geom = parse_tmc_polyline(tmc.get("tmc_polyline"))
             if len(geom) < 2:
                 continue
             segments.append({"status": tmc.get("tmc_status") if tmc.get("tmc_status") in KNOWN_STATUS

@@ -7,6 +7,7 @@
   <title>MultiRoute Monitor · 多路线监控</title>
   <link rel="stylesheet" href="/style.css">
   <script defer src="/core.js"></script>
+  <script defer src="/amap_map.js"></script>
   <script defer src="/app.js"></script>
 </head>
 <body>
@@ -25,12 +26,14 @@
     <main>
       <section class="intro">
         <div>
-          <div class="eyebrow">LOCAL ROUTE OVERVIEW <span class="sep">/</span> M1-A</div>
+          <div class="eyebrow">LOCAL ROUTE OVERVIEW <span class="sep">/</span> M1-B</div>
           <h1>每条路线，一眼掌握<span class="accent">。</span></h1>
-          <p>多路线实时看板的本地交互原型。当前所有路线、时间、拥堵颜色均为虚构模拟，不代表真实道路或交通预测。</p>
+          <p>模拟模式默认开启。获得真实高德接口的使用授权并完成额度验证后，可手动查询路线；在此之前所有预计时间与路况均为虚构模拟。</p>
         </div>
         <div class="main-actions">
-          <button id="refresh-all" class="btn btn-outline" type="button"><span aria-hidden="true">↻</span> 刷新全部</button>
+          <button id="refresh-all" class="btn btn-outline" type="button"><span aria-hidden="true">↻</span> 刷新模拟数据</button>
+          <button id="amap-auth-open" class="btn btn-outline" type="button">高德授权设置</button>
+          <button id="amap-disable" class="btn btn-outline" type="button" hidden>停用真实接口</button>
           <button id="add-route" class="btn btn-primary" type="button"><span aria-hidden="true">＋</span> 添加路线</button>
         </div>
       </section>
@@ -47,8 +50,11 @@
               <option value="30">每 30 分钟</option>
             </select>
             <button id="pause-toggle" class="btn btn-small btn-outline" type="button">暂停</button>
+            <button id="refresh-live-all" class="btn btn-small btn-outline" type="button" hidden>高德查询全部</button>
+            <label id="live-auto-wrap" class="live-auto-wrap" hidden><input id="live-auto-refresh" type="checkbox"> 自动刷新真实路况</label>
           </div>
         </div>
+        <p id="amap-status" class="amap-status" role="status">高德实时接口：未授权启用 · 当前仅显示模拟数据</p>
         <div id="routes" class="route-grid" aria-live="polite"></div>
         <div class="board-footnote">
           <span><i class="legend-dot clear"></i>模拟畅通 <i class="legend-dot slow"></i>模拟缓行 <i class="legend-dot busy"></i>模拟拥堵 <i class="legend-dot heavy"></i>模拟严重拥堵</span>
@@ -56,20 +62,42 @@
         </div>
       </section>
 
-      <footer><span>MultiRoute Monitor · v0.1.0 M1-A</span><span>仅用于界面和流程测试 · 未连接高德 / 未启用真实交通查询</span></footer>
+      <footer><span>MultiRoute Monitor · v0.2.0 M1-B</span><span>M1-B 候选 · 默认离线模拟；真实查询须单独授权</span></footer>
     </main>
   </div>
 
   <dialog id="route-dialog" aria-labelledby="dialog-title">
     <form id="route-form" class="route-form">
       <div class="dialog-head"><div><div class="eyebrow">ROUTE CONFIGURATION</div><h2 id="dialog-title">添加模拟路线</h2></div><button id="dialog-close" class="icon-btn" type="button" aria-label="关闭">×</button></div>
-      <p class="dialog-help">这里仅保存显示名称和模拟基础耗时，不发送任何地点信息到外部服务。</p>
+      <p class="dialog-help">显示名称和基础模拟时间保存在浏览器。真实查询需填写高德 GCJ-02 经纬度；地址仅用于显示，不会自动发送地理编码请求。<a href="https://lbs.amap.com/tools/picker" target="_blank" rel="noopener noreferrer">打开高德官方坐标拾取器</a>，复制起点、终点经纬度后粘贴到下方。未经服务端授权启用，不会发送到高德。</p>
       <label>路线名称<input name="name" maxlength="36" required placeholder="例如：测试路线 E" autocomplete="off"></label>
-      <div class="form-two"><label>起点名称<input name="origin" maxlength="60" required placeholder="例如：虚构起点" autocomplete="off"></label>
-      <label>终点名称<input name="destination" maxlength="60" required placeholder="例如：虚构终点" autocomplete="off"></label></div>
+      <div class="form-two"><label>起点名称/完整地址<input name="origin" maxlength="60" required placeholder="例如：虚构起点" autocomplete="off"></label>
+      <label>终点名称/完整地址<input name="destination" maxlength="60" required placeholder="例如：虚构终点" autocomplete="off"></label></div>
       <label>模拟基础用时（分钟）<input name="base_minutes" type="number" min="5" max="240" step="1" required value="25"></label>
+      <div class="form-two"><label>起点高德经纬度（GCJ-02，可选）<input name="origin_coord" placeholder="116.123456,39.123456" maxlength="45" autocomplete="off"></label><label>终点高德经纬度（GCJ-02，可选）<input name="destination_coord" placeholder="116.234567,39.234567" maxlength="45" autocomplete="off"></label></div>
+      <label>途经点高德经纬度（GCJ-02，可选、最多1个）<input name="waypoint_coord" placeholder="经度,纬度" maxlength="45" autocomplete="off"></label>
       <div id="form-error" class="form-error" role="alert" hidden></div>
       <div class="dialog-actions"><button id="dialog-cancel" class="btn btn-outline" type="button">取消</button><button id="dialog-save" class="btn btn-primary" type="submit">保存路线</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="amap-auth-dialog" aria-labelledby="amap-auth-title">
+    <form id="amap-auth-form" class="route-form">
+      <div class="dialog-head"><div><div class="eyebrow">AMAP AUTHORIZATION & BUDGET GATE</div><h2 id="amap-auth-title">高德授权与费用门禁</h2></div><button id="amap-auth-close" class="icon-btn" type="button" aria-label="关闭">×</button></div>
+      <p class="dialog-help">只有在高德工单已明确书面确认允许本项目的个人日常路线监控用途后，才填写并提交。此页面只记录你的确认，不会向高德核验工单，也不会读取高德控制台。</p>
+      <label>高德工单编号<input name="ticket_id" required minlength="4" maxlength="80" pattern="[A-Za-z0-9_-]{4,80}" placeholder="填写高德工单编号" autocomplete="off"></label>
+      <div class="form-two">
+        <label>驾车路径规划本月剩余免费次数<input name="route_quota_remaining" type="number" min="2" max="100000000" step="1" required placeholder="从高德控制台查询"></label>
+        <label>JS 地图初始化本月剩余次数<input name="map_quota_remaining" type="number" min="2" max="100000000" step="1" required placeholder="从高德控制台查询"></label>
+      </div>
+      <p class="dialog-help">程序只使用你填写剩余额度的一半作为预算，并进一步限制：驾车规划最多 30,000 次/月、1,000 次/日；地图初始化最多 900 次/月、30 次/日。计数损坏或超限时自动停止。</p>
+      <label class="auth-check"><input name="personal_developer_verified" type="checkbox" required> 我已完成个人开发者认证并签署高德开放平台服务协议</label>
+      <label class="auth-check"><input name="approved_by_amap" type="checkbox" required> 我已收到高德明确书面答复，确认允许此个人日常路线监控用途</label>
+      <label class="auth-check"><input name="quota_verified" type="checkbox" required> 我已在高德控制台核对本月剩余免费配额</label>
+      <label class="auth-check"><input name="account_exclusive" type="checkbox" required> 同一开发者账号没有其他应用或 Key 共用并消耗上述配额</label>
+      <label class="auth-check"><input name="zero_cost_ack" type="checkbox" required> 我理解高德超额后可能消耗流量包和账户余额；本机预算不能替代高德账号级计费限制</label>
+      <div class="form-error" id="amap-auth-warning" role="note">如果尚未取得高德书面许可，或不能确认账号级剩余额度，请取消，不要启用真实接口。</div>
+      <div class="dialog-actions"><button id="amap-auth-cancel" class="btn btn-outline" type="button">暂不启用</button><button class="btn btn-primary" type="submit">确认并启用高德</button></div>
     </form>
   </dialog>
   <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>

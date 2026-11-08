@@ -1,4 +1,4 @@
-name: M1-A tests
+name: M1-B full validation
 on:
   pull_request:
     paths-ignore:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   unit:
-    name: Python and Node (${{ matrix.os }})
+    name: Python HTTP integration and Node tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,10 +28,10 @@ jobs:
       - name: Python stdlib HTTP integration
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Node mock model
-        run: node --test tests/test_core.cjs
+        run: node --test tests/test_core.cjs tests/test_amap_map.cjs
   browser:
-    name: Real Chromium E2E (Ubuntu)
-    runs-on: ubuntu-latest
+    name: Real Chromium E2E (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

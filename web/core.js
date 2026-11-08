@@ -19,6 +19,15 @@
     if (!v || v.length > max) throw new Error('请输入1至' + max + '个字符');
     return v;
   }
+  function coordinate(value) {
+    if (typeof value !== 'string' || value.length > 45) throw new Error('坐标格式错误');
+    const parts = value.trim().split(',');
+    if (parts.length !== 2 || parts.some(function (x) {return !/^[+-]?\d{1,3}(?:\.\d{1,6})?$/.test(x.trim());}))
+      throw new Error('请输入经度,纬度，最多6位小数');
+    const lng = Number(parts[0]), lat = Number(parts[1]);
+    if (Math.abs(lng) > 180 || Math.abs(lat) > 90) throw new Error('经纬度超出范围');
+    return lng + ',' + lat;
+  }
   function normalizeRoute(value, id) {
     if (!value || typeof value !== 'object') throw new Error('路线格式错误');
     const base = Number(value.base_minutes);
@@ -29,7 +38,19 @@
     if (origin === destination) throw new Error('起点和终点不能相同');
     const safeId = typeof id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(id) ? id : null;
     if (!safeId) throw new Error('无效的路线编号');
-    return { id: safeId, name: name, origin: origin, destination: destination, base_minutes: base };
+    const route = { id: safeId, name: name, origin: origin, destination: destination, base_minutes: base };
+    // Optional precise coordinates are user-entered, stored only in this browser.
+    const a = typeof value.origin_coord === 'string' ? value.origin_coord.trim() : '';
+    const b = typeof value.destination_coord === 'string' ? value.destination_coord.trim() : '';
+    const wp = typeof value.waypoint_coord === 'string' ? value.waypoint_coord.trim() : '';
+    if (a || b || wp) {
+      if (!a || !b) throw new Error('真实路线必须同时填写起终点经纬度');
+      route.origin_coord = coordinate(a);
+      route.destination_coord = coordinate(b);
+      if (route.origin_coord === route.destination_coord) throw new Error('真实路线起终点坐标不能相同');
+      if (wp) route.waypoint_coord = coordinate(wp);
+    }
+    return route;
   }
   function loadRoutes(json) {
     if (typeof json !== 'string') return DEFAULT_ROUTES.map(function (r) { return normalizeRoute(r, r.id); });

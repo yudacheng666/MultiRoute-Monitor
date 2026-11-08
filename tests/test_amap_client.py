@@ -182,8 +182,8 @@ class DriverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "local" / "amap_request_attempts.json"
             path.parent.mkdir()
-            path.write_text(json.dumps({"day":datetime.now().astimezone().date().isoformat(),"count":7}))
             gw = LiveGateway(tmp, env=env)
+            path.write_text(json.dumps({"day":gw._day(),"count":7}))
             self.assertEqual(gw.status()["remaining_monthly_app_budget"], 43)
 
     def test_map_initialization_has_separate_daily_and_monthly_hard_cap(self):

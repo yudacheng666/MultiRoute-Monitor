@@ -17,8 +17,8 @@ EXAMPLE = {
         "steps": [
             {"polyline": "116.100000,39.900000;116.200000,39.910000",
              "tmcs": [
-                {"tmc_status": "畅通", "tmc_polyline": "116.100000,39.900000;116.150000,39.905000"},
-                {"tmc_status": "拥堵", "tmc_polyline": "116.150000,39.905000;116.200000,39.910000"},
+                {"tmc_status": "畅通", "tmc_polyline": "116.100000,39.900000,116.150000,39.905000"},
+                {"tmc_status": "拥堵", "tmc_polyline": "116.150000,39.905000,116.200000,39.910000"},
             ]}
         ],
     }]},
@@ -57,6 +57,17 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(result["distance_km"], 12.5)
         self.assertEqual([x["status"] for x in result["segments"]], ["畅通", "拥堵"])
         self.assertTrue(result["traffic_available"])
+
+    def test_tmc_polyline_accepts_legacy_semicolon_and_rejects_odd_flat_list(self):
+        payload = json.loads(json.dumps(EXAMPLE))
+        tmcs = payload["route"]["paths"][0]["steps"][0]["tmcs"]
+        tmcs[0]["tmc_polyline"] = "116.100000,39.900000;116.150000,39.905000"
+        result = parse_driving(payload)
+        self.assertEqual(result["segments"][0]["points"],
+                         [[116.1,39.9],[116.15,39.905]])
+        payload["route"]["paths"][0]["steps"][0]["tmcs"][0]["tmc_polyline"] = "116.1,39.9,116.2"
+        with self.assertRaises(ProviderError):
+            parse_driving(payload)
 
     def test_unknown_traffic_not_faked(self):
         payload = json.loads(json.dumps(EXAMPLE))

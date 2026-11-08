@@ -102,6 +102,7 @@ def query_path(request, key):
 
 
 def parse_polyline(raw):
+    """Parse route/step polyline: longitude,latitude pairs separated by semicolons."""
     if not isinstance(raw, str) or not raw:
         return []
     parts = raw.split(";")
@@ -111,6 +112,27 @@ def parse_polyline(raw):
         return [list(map(float, coord(point).split(","))) for point in parts]
     except RouteInputError as exc:
         raise ProviderError("地图线路坐标无效") from exc
+
+
+def parse_tmc_polyline(raw):
+    """Parse v5 TMC polyline, whose current docs specify comma-separated points.
+
+    Accept the older semicolon-delimited pair form as a compatibility fallback.
+    """
+    if not isinstance(raw, str) or not raw:
+        return []
+    if ";" in raw:
+        return parse_polyline(raw)
+    values = [value.strip() for value in raw.split(",")]
+    if len(values) < 4 or len(values) % 2 or len(values) // 2 > 1500:
+        raise ProviderError("TMC 路况坐标格式无效")
+    points = []
+    try:
+        for index in range(0, len(values), 2):
+            points.append(list(map(float, coord(values[index] + "," + values[index + 1]).split(","))))
+    except RouteInputError as exc:
+        raise ProviderError("TMC 路况坐标无效") from exc
+    return points
 
 
 def parse_driving(payload):

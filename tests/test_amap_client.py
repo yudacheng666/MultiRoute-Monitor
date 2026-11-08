@@ -122,6 +122,21 @@ class DriverTests(unittest.TestCase):
             again = LiveGateway(tmp, env=env)
             self.assertEqual(again.status()["remaining_map_proxy_budget"], 499)
 
+    def test_map_initialization_has_independent_qps_guard(self):
+        now=[100.0]
+        env={"MRM_AMAP_WEB_KEY":"LOCAL_FAKE_WEB_KEY","MRM_USAGE_AUTHORIZED":"YES",
+             "MRM_FREE_QUOTA_VERIFIED":"YES","MRM_EXPLICIT_LIVE_OPT_IN":"YES",
+             "MRM_AMAP_JS_KEY":"LOCAL_FAKE_JS_KEY","MRM_AMAP_JS_SECURITY":"LOCAL_FAKE_SECURITY",
+             "MRM_AMAP_MAP_OPT_IN":"YES"}
+        with tempfile.TemporaryDirectory() as tmp:
+            gateway=LiveGateway(tmp,env=env,clock=lambda:now[0])
+            gateway.reserve_map_initialization()
+            with self.assertRaises(RateLimited):
+                gateway.reserve_map_initialization()
+            now[0]+=1.1
+            gateway.reserve_map_initialization()
+            self.assertEqual(gateway.status()["remaining_map_initializations"],28)
+
     def test_last_map_initialization_does_not_block_its_proxy_resources(self):
         env = {"MRM_AMAP_WEB_KEY":"LOCAL_FAKE_WEB_KEY",
                "MRM_USAGE_AUTHORIZED":"YES","MRM_FREE_QUOTA_VERIFIED":"YES",

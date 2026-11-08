@@ -229,6 +229,7 @@ class LiveGateway:
         self.clock = clock or time.time
         self._lock = threading.Lock()
         self._last_global = 0.0
+        self._last_map_init = 0.0
         self._last_route = {}
         local_dir = Path(root) / "local"
         self.usage_file = local_dir / "amap_request_attempts.json"
@@ -367,12 +368,16 @@ class LiveGateway:
         if not self.map_enabled():
             raise Disabled("地图组件尚未授权启用或已达到地图预算")
         with self._lock:
+            now = self.clock()
+            if now - self._last_map_init < MIN_MAP_INIT_SECONDS:
+                raise RateLimited("地图初始化过于频繁，请间隔至少1.1秒")
             usage = self._usage(self.map_init_usage_file)
             daily, monthly = self._remaining(
                 usage, self.map_init_daily_cap, self.map_init_monthly_cap)
             if daily <= 0 or monthly <= 0:
                 raise RateLimited("地图初始化达到本机日/月硬上限")
             self._reserve(usage, self.map_init_usage_file)
+            self._last_map_init = now
 
     def reserve_map_proxy(self):
         if not self.map_enabled():

@@ -11,3 +11,5 @@
 #amap-auth-dialog .auth-check{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px;margin:11px 0;color:#d1deea;font-size:12px;line-height:1.55}
 #amap-auth-dialog .auth-check input{width:auto;flex:0 0 auto;margin:2px 0 0;accent-color:#2a9d8f}
 #amap-auth-warning{margin:12px 0 0;background:#30272a;border-color:#795158;color:#f0c5c8}
+
+@media(max-width:660px){.main-actions{flex-wrap:wrap}.main-actions .btn{min-width:0}}

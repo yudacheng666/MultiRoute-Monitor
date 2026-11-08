@@ -3,6 +3,7 @@ import http.client
 import inspect
 import json
 import threading
+import tempfile
 import unittest
 from pathlib import Path
 

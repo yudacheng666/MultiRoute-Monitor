@@ -85,7 +85,8 @@ async function main() {
     let realCalls=0;
     await localLive.route('**/api/amap/status',r=>r.fulfill({
       status:200,contentType:'application/json',
-      body:JSON.stringify({live_enabled:true,mode:'live_ready',remaining_app_budget:3})
+      body:JSON.stringify({live_enabled:true,mode:'live_ready',remaining_app_budget:3,
+        remaining_monthly_app_budget:30,js_map_enabled:false})
     }));
     await localLive.route('**/api/amap/drive',r=>{
       realCalls+=1;
@@ -107,7 +108,7 @@ async function main() {
     await localLive.locator('[name=origin_coord]').fill('116.1,39.9');
     await localLive.locator('[name=destination_coord]').fill('116.2,39.91');
     await localLive.locator('#dialog-save').click();
-    await localLive.getByRole('button',{name:'高德手动查询示例路线 A'}).click();
+    await localLive.getByRole('button',{name:'高德查询全部'}).click();
     await localLive.locator('.route-card').first().locator('.sim-chip').getByText('AMAP').waitFor();
     const first=await localLive.locator('.route-card').first().innerText();
     assert.match(first,/23/);

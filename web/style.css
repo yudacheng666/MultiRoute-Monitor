@@ -3,3 +3,5 @@
 .schematic.mapbox-active{height:190px;min-height:190px;background:#142536;border-color:#39586b}
 .schematic.mapbox-active:after{content:none}
 .schematic.mapbox-active .amap-logo,.schematic.mapbox-active .amap-copyright{display:block}
+
+[hidden]{display:none!important}.live-auto-wrap{display:flex;align-items:center;gap:6px;color:#a8c3d0!important;font-size:11px!important;white-space:nowrap}.live-auto-wrap input{accent-color:#2a9d8f}

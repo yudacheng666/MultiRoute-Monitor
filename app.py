@@ -261,9 +261,9 @@ def main():
     with make_server(args.port) as server:
         enabled = server.gateway.status()["live_enabled"]
         url = "http://127.0.0.1:%s/" % server.server_port
-        print(url + " · " + ("高德候选（已授权）" if enabled else "模拟模式（默认，非真实路况）"),
+        print(url + " | " + ("AMap live mode" if enabled else "simulation mode (default)"),
               flush=True)
-        print("按 Ctrl+C 停止", flush=True)
+        print("Press Ctrl+C to stop", flush=True)
         if args.open_browser:
             threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         try:

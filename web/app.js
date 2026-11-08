@@ -371,7 +371,14 @@
       render();
     }).catch(function() {
       state.liveReady=false;
+      state.mapEnabled=false;
+      state.mapKey=null;
+      state.liveAuto=false;
+      document.getElementById('refresh-live-all').hidden=true;
+      document.getElementById('live-auto-wrap').hidden=true;
       document.getElementById('amap-status').textContent='高德接口状态不可用 · 保持模拟模式';
+      document.querySelector('.mock-flag').textContent='模拟模式 · 非真实路况';
+      render();
     });
   }
   function init() {

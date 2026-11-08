@@ -30,6 +30,12 @@ async function main() {
     const external=[];
     page.on('request', req=>{if(!req.url().startsWith(origin+'/'))external.push(req.url());});
     await page.goto(origin+'/',{waitUntil:'networkidle'});
+    await page.getByRole('button',{name:'高德授权设置'}).click();
+    assert.equal(await page.locator('#amap-auth-dialog').isVisible(),true);
+    assert.match(await page.locator('#amap-auth-dialog').innerText(),/只有在高德工单已明确书面确认/);
+    assert.equal(await page.locator('#amap-auth-form input[type=checkbox]').count(),4);
+    await page.getByRole('button',{name:'暂不启用'}).click();
+    assert.equal(await page.locator('#amap-auth-dialog').isVisible(),false);
     assert.equal(await page.locator('.summary').count(),0,'no redundant statistics section');
     assert.equal(await page.locator('.summary-tile').count(),0);
     assert.equal(await page.locator('#stat-count, #stat-avg, #stat-congested').count(),0);

@@ -223,6 +223,47 @@ class MapProxyHTTPIntegrationTests(unittest.TestCase):
         self.assertEqual(self.gateway.reservations, 0)
         transport.assert_not_called()
 
+    def test_map_initialization_endpoint_denied_by_default(self):
+        payload = json.dumps({})
+        headers = {"Origin":"http://127.0.0.1:%s" % self.port,
+                   "X-MRM-Request":"1", "Content-Type":"application/json"}
+        code, _, _ = self.request("/api/amap/map-init", method="POST",
+                                  body=payload, headers=headers)
+        self.assertEqual(code, 403)
+
+    def test_map_initialization_endpoint_counts_only_authorized_local_request(self):
+        class Gateway:
+            js_security = "PRIVATE_TEST_SECURITY"
+            def __init__(self):
+                self.count = 0
+            def map_enabled(self):
+                return True
+            def reserve_map_initialization(self):
+                self.count += 1
+            def status(self):
+                return {"remaining_map_initializations":30-self.count,
+                        "remaining_monthly_map_initializations":900-self.count}
+        server = make_server(0, gateway=Gateway())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+            body = json.dumps({})
+            conn.request("POST", "/api/amap/map-init", body=body, headers={
+                "Host":"127.0.0.1:%s" % server.server_port,
+                "Origin":"http://127.0.0.1:%s" % server.server_port,
+                "X-MRM-Request":"1", "Content-Type":"application/json"})
+            response = conn.getresponse()
+            payload = json.loads(response.read())
+            conn.close()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(payload["remaining_map_initializations"],29)
+            self.assertEqual(server.gateway.count,1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,11 @@ ENDPOINT = "restapi.amap.com"
 PATH = "/v5/direction/driving"
 KNOWN_STATUS = frozenset({"未知", "畅通", "缓行", "拥堵", "严重拥堵"})
 DAILY_CAP = 1000
+MONTHLY_CAP = 30000
+MAP_INIT_DAILY_CAP = 30
+MAP_INIT_MONTHLY_CAP = 900
+MAP_PROXY_DAILY_CAP = 500
+MAP_PROXY_MONTHLY_CAP = 15000
 MIN_GLOBAL_SECONDS = 2
 MIN_ROUTE_SECONDS = 300
 MAX_RESPONSE_BYTES = 1_000_000
@@ -203,79 +208,184 @@ class LiveGateway:
         self._lock = threading.Lock()
         self._last_global = 0.0
         self._last_route = {}
-        self.usage_file = Path(root) / "local" / "amap_request_attempts.json"
-        self.map_usage_file = Path(root) / "local" / "amap_map_proxy_attempts.json"
-        self.map_cap = 500
-        # Never allow the app to consume the entire provider's published quota.
+        local_dir = Path(root) / "local"
+        self.usage_file = local_dir / "amap_request_attempts.json"
+        self.map_usage_file = local_dir / "amap_map_proxy_attempts.json"
+        self.map_init_usage_file = local_dir / "amap_map_initialization_attempts.json"
+        self.map_init_daily_cap = MAP_INIT_DAILY_CAP
+        self.map_init_monthly_cap = MAP_INIT_MONTHLY_CAP
+        self.map_proxy_daily_cap = MAP_PROXY_DAILY_CAP
+        self.map_proxy_monthly_cap = MAP_PROXY_MONTHLY_CAP
         try:
-            requested = int(env.get("MRM_DAILY_REQUEST_CAP", "100"))
+            requested = int(env.get("MRM_DAILY_REQUEST_CAP", "1000"))
         except (TypeError, ValueError):
             requested = 0
+        try:
+            requested_monthly = int(env.get("MRM_MONTHLY_REQUEST_CAP", str(MONTHLY_CAP)))
+        except (TypeError, ValueError):
+            requested_monthly = 0
         self.cap = min(DAILY_CAP, max(0, requested))
-        if self.cap <= 0:
+        self.monthly_cap = min(MONTHLY_CAP, max(0, requested_monthly))
+        if self.cap <= 0 or self.monthly_cap <= 0:
             self.enabled = False
 
     def _day(self):
         return datetime.now(CHINA_TZ).date().isoformat()
 
+    def _month(self):
+        return self._day()[:7]
+
     def _usage(self, path=None):
-        path = self.usage_file if path is None else path
-        return self._read_usage(path)
+        return self._read_usage(self.usage_file if path is None else path)
 
     def _read_usage(self, path):
+        today, month = self._day(), self._month()
         if not path.exists():
-            return {"day": self._day(), "count": 0}
+            return {"day": today, "day_count": 0, "month": month, "month_count": 0}
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or not isinstance(data.get("count"), int) or data["count"] < 0:
+            if not isinstance(data, dict):
                 raise ValueError()
-            if data.get("day") == self._day():
-                return data
-            # If saved date is in the future, stop (clock tampering).
-            if not isinstance(data.get("day"), str) or data["day"] > self._day():
+            # Migrate the previous {day,count} format conservatively. Its last
+            # recorded count is carried into this month's counter rather than lost.
+            if "day_count" not in data or "month_count" not in data:
+                saved_day = data.get("day")
+                old_count = data.get("count")
+                if (not isinstance(saved_day, str) or not isinstance(old_count, int)
+                        or isinstance(old_count, bool) or old_count < 0):
+                    raise ValueError()
+                saved_date = datetime.strptime(saved_day, "%Y-%m-%d").date()
+                current_date = datetime.strptime(today, "%Y-%m-%d").date()
+                if saved_date > current_date:
+                    raise ValueError()
+                carry = old_count if saved_day[:7] == month else 0
+                return {"day": today, "day_count": old_count if saved_day == today else 0,
+                        "month": month, "month_count": carry}
+            saved_day, saved_month = data.get("day"), data.get("month")
+            day_count, month_count = data.get("day_count"), data.get("month_count")
+            if (not isinstance(saved_day, str) or not isinstance(saved_month, str)
+                    or not isinstance(day_count, int) or isinstance(day_count, bool) or day_count < 0
+                    or not isinstance(month_count, int) or isinstance(month_count, bool) or month_count < 0):
                 raise ValueError()
-            return {"day": self._day(), "count": 0}
-        except (OSError, ValueError) as exc:
+            saved_date = datetime.strptime(saved_day, "%Y-%m-%d").date()
+            current_date = datetime.strptime(today, "%Y-%m-%d").date()
+            if saved_date > current_date or saved_month > month or saved_month != saved_day[:7]:
+                raise ValueError()
+            return {
+                "day": today,
+                "day_count": day_count if saved_day == today else 0,
+                "month": month,
+                "month_count": month_count if saved_month == month else 0,
+            }
+        except (OSError, ValueError, TypeError) as exc:
             raise Disabled("本地配额计数异常，已停止真实调用") from exc
 
     def _reserve(self, usage, path=None):
         path = self.usage_file if path is None else path
         path.parent.mkdir(parents=True, exist_ok=True)
         pending = path.with_suffix(".tmp")
+        record = {
+            "day": self._day(),
+            "day_count": usage["day_count"] + 1,
+            "month": self._month(),
+            "month_count": usage["month_count"] + 1,
+        }
         try:
-            pending.write_text(json.dumps({"day": self._day(), "count": usage["count"] + 1}),
-                               encoding="utf-8")
+            fd = os.open(str(pending), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                json.dump(record, out)
             os.replace(pending, path)
+            if os.name != "nt":
+                os.chmod(path, 0o600)
         except OSError as exc:
             raise Disabled("无法持久化请求计数，已停止真实调用") from exc
+        finally:
+            try:
+                pending.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    @staticmethod
+    def _remaining(usage, daily_cap, monthly_cap):
+        return (max(0, daily_cap - usage["day_count"]),
+                max(0, monthly_cap - usage["month_count"]))
+
+    def _safe_usage(self, path):
+        try:
+            return self._usage(path), True
+        except Disabled:
+            return {"day": self._day(), "day_count": 0,
+                    "month": self._month(), "month_count": 0}, False
 
     def map_enabled(self):
-        return bool(self.enabled and self.map_explicit and
-                    self.js_key and self.js_security)
+        if not (self.enabled and self.map_explicit and self.js_key and self.js_security):
+            return False
+        init_usage, init_ok = self._safe_usage(self.map_init_usage_file)
+        proxy_usage, proxy_ok = self._safe_usage(self.map_usage_file)
+        if not init_ok or not proxy_ok:
+            return False
+        init_day, init_month = self._remaining(
+            init_usage, self.map_init_daily_cap, self.map_init_monthly_cap)
+        proxy_day, proxy_month = self._remaining(
+            proxy_usage, self.map_proxy_daily_cap, self.map_proxy_monthly_cap)
+        return min(init_day, init_month, proxy_day, proxy_month) > 0
+
+    def reserve_map_initialization(self):
+        if not self.map_enabled():
+            raise Disabled("地图组件尚未授权启用或已达到地图预算")
+        with self._lock:
+            usage = self._usage(self.map_init_usage_file)
+            daily, monthly = self._remaining(
+                usage, self.map_init_daily_cap, self.map_init_monthly_cap)
+            if daily <= 0 or monthly <= 0:
+                raise RateLimited("地图初始化达到本机日/月硬上限")
+            self._reserve(usage, self.map_init_usage_file)
 
     def reserve_map_proxy(self):
         if not self.map_enabled():
-            raise Disabled("地图组件尚未授权启用")
+            raise Disabled("地图组件尚未授权启用或已达到地图预算")
         with self._lock:
             usage = self._usage(self.map_usage_file)
-            if usage["count"] >= self.map_cap:
-                raise RateLimited("地图服务代理请求达到本机硬上限")
+            daily, monthly = self._remaining(
+                usage, self.map_proxy_daily_cap, self.map_proxy_monthly_cap)
+            if daily <= 0 or monthly <= 0:
+                raise RateLimited("地图代理请求达到本机日/月硬上限")
             self._reserve(usage, self.map_usage_file)
 
     def status(self):
         with self._lock:
-            try:
-                remaining = max(0, self.cap - self._usage()["count"])
-            except Disabled:
-                remaining = 0
-            return {"live_enabled": bool(self.enabled and remaining > 0),
-                    "mode": "live_ready" if self.enabled and remaining > 0 else "simulation",
-                    "daily_request_cap": self.cap,
-                    "remaining_app_budget": remaining,
-                    "requires_verified_authorization": True,
-                    "js_map_enabled": self.map_enabled(),
-                    "js_map_key": self.js_key if self.map_enabled() else None,
-                    "remaining_map_proxy_budget": max(0, self.map_cap - self._usage(self.map_usage_file)["count"]) if self.map_enabled() else 0}
+            route_usage, route_ok = self._safe_usage(self.usage_file)
+            map_usage, map_ok = self._safe_usage(self.map_usage_file)
+            init_usage, init_ok = self._safe_usage(self.map_init_usage_file)
+            remaining, monthly_remaining = self._remaining(
+                route_usage, self.cap, self.monthly_cap)
+            map_proxy_remaining, map_proxy_monthly = self._remaining(
+                map_usage, self.map_proxy_daily_cap, self.map_proxy_monthly_cap)
+            map_init_remaining, map_init_monthly = self._remaining(
+                init_usage, self.map_init_daily_cap, self.map_init_monthly_cap)
+            live_enabled = bool(self.enabled and route_ok and remaining > 0
+                                and monthly_remaining > 0)
+            map_enabled = bool(live_enabled and self.map_explicit and self.js_key
+                               and self.js_security and map_ok and init_ok
+                               and map_proxy_remaining > 0 and map_proxy_monthly > 0
+                               and map_init_remaining > 0 and map_init_monthly > 0)
+            return {
+                "live_enabled": live_enabled,
+                "mode": "live_ready" if live_enabled else "simulation",
+                "daily_request_cap": self.cap,
+                "monthly_request_cap": self.monthly_cap,
+                "remaining_app_budget": remaining if route_ok else 0,
+                "remaining_monthly_app_budget": monthly_remaining if route_ok else 0,
+                "requires_verified_authorization": True,
+                "js_map_enabled": map_enabled,
+                "js_map_key": self.js_key if map_enabled else None,
+                "map_initialization_daily_cap": self.map_init_daily_cap,
+                "map_initialization_monthly_cap": self.map_init_monthly_cap,
+                "remaining_map_initializations": map_init_remaining if init_ok else 0,
+                "remaining_monthly_map_initializations": map_init_monthly if init_ok else 0,
+                "remaining_map_proxy_budget": map_proxy_remaining if map_ok else 0,
+                "remaining_monthly_map_proxy_budget": map_proxy_monthly if map_ok else 0,
+            }
 
     def drive(self, data):
         # Permission check must come before validation and any network activity.
@@ -285,8 +395,9 @@ class LiveGateway:
         token = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
         with self._lock:
             usage = self._usage()
-            if usage["count"] >= self.cap:
-                raise RateLimited("已达到应用内高德请求硬上限")
+            daily, monthly = self._remaining(usage, self.cap, self.monthly_cap)
+            if daily <= 0 or monthly <= 0:
+                raise RateLimited("已达到应用内高德日/月硬上限")
             now = self.clock()
             if now - self._last_global < MIN_GLOBAL_SECONDS:
                 raise RateLimited("请求过于频繁，请稍后操作")

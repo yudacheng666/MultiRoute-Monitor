@@ -88,7 +88,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(403, b"Map not enabled")
                 return
             # Refuse cross-site browser requests to a local trusted proxy.
-            if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+            fetch_site = self.headers.get("Sec-Fetch-Site")
+            origin = self.headers.get("Origin")
+            allowed_origins = ("http://127.0.0.1:%s" % self.server.server_port,
+                               "http://localhost:%s" % self.server.server_port)
+            if (fetch_site not in ("same-origin", "none")
+                    or (origin is not None and origin not in allowed_origins)):
                 self._send(403, b"Cross-site denied")
                 return
             try:
@@ -128,7 +133,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_allowed():
             self._send(403, b"Host not allowed")
             return
-        if urlsplit(self.path).path != "/api/amap/drive":
+        path = urlsplit(self.path).path
+        if path not in ("/api/amap/drive", "/api/amap/map-init"):
             self._send(405, b"Not allowed")
             return
         # Fail closed on local cross-site requests, including browser forms.
@@ -139,15 +145,40 @@ class Handler(BaseHTTPRequestHandler):
                 or self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json"):
             self._json(403, {"error": "请求来源或类型不允许"})
             return
-        if not self.server.gateway.status()["live_enabled"]:
-            self._json(403, {"error": "真实高德模式未启用或已达到额度限制"})
-            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
-            length = 0
-        if length < 1 or length > 2048:
+            length = -1
+        if length < 0 or length > 2048 or (path == "/api/amap/drive" and length < 1):
             self._json(413, {"error": "请求内容长度不合法"})
+            return
+        if path == "/api/amap/map-init":
+            if length:
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                    if payload != {}:
+                        raise ValueError()
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                    self._json(400, {"error": "地图初始化请求格式错误"})
+                    return
+            try:
+                self.server.gateway.reserve_map_initialization()
+                status = self.server.gateway.status()
+            except RateLimited:
+                self._json(429, {"error": "地图初始化已达到本机日/月预算"})
+            except Disabled:
+                self._json(403, {"error": "高德地图尚未授权启用"})
+            except Exception:
+                self._json(503, {"error": "地图预算状态不可用"})
+            else:
+                self._json(200, {
+                    "ok": True,
+                    "remaining_map_initializations": status["remaining_map_initializations"],
+                    "remaining_monthly_map_initializations": status["remaining_monthly_map_initializations"],
+                })
+            return
+        if not self.server.gateway.status()["live_enabled"]:
+            self._json(403, {"error": "真实高德模式未启用或已达到额度限制"})
             return
         try:
             data = json.loads(self.rfile.read(length))
@@ -155,7 +186,7 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError, RouteInputError) as exc:
             self._json(400, {"error": str(exc) if isinstance(exc, RouteInputError) else "路线数据格式错误"})
         except RateLimited:
-            self._json(429, {"error": "请求频率或每日额度已达内部限制"})
+            self._json(429, {"error": "请求频率或日/月额度已达内部限制"})
         except Disabled:
             self._json(403, {"error": "真实模式暂不可用"})
         except ProviderError:

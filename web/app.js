@@ -271,6 +271,11 @@
     if (!node||!btn||btn.disabled) return;
     btn.disabled=true;btn.textContent='地图加载中…';
     try {
+      const gate=await fetch('/api/amap/map-init',{method:'POST',
+        headers:{'Content-Type':'application/json','X-MRM-Request':'1'},
+        body:JSON.stringify({}),cache:'no-store'});
+      const gatePayload=await gate.json();
+      if(!gate.ok)throw new Error(gatePayload.error||'地图初始化额度已用完');
       node.classList.add('mapbox-active');
       await window.AMapMap.show(node,live.segments,state.mapKey);
       btn.textContent='高德地图已加载';
@@ -319,7 +324,7 @@
       if(state.liveReady) {
         document.querySelector('.mock-flag').textContent='高德接入已就绪 · 未查询路线为模拟';
         document.querySelector('footer span:last-child').textContent=
-          'M1-B 候选 · 高德为手动单次查询 · 暂无地图底图';
+          'M1-B 候选 · 高德为手动单次查询 · 地图需手动打开';
       }
       render();
     }).catch(function() {

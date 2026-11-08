@@ -159,6 +159,59 @@ class DriverTests(unittest.TestCase):
                 gw.drive(COORDS)
             self.assertEqual(gw.status()["remaining_app_budget"], 99)
 
+    def test_monthly_cap_survives_restart_and_daily_reset(self):
+        env = {"MRM_AMAP_WEB_KEY":"FAKE", "MRM_USAGE_AUTHORIZED":"YES",
+               "MRM_FREE_QUOTA_VERIFIED":"YES", "MRM_EXPLICIT_LIVE_OPT_IN":"YES",
+               "MRM_DAILY_REQUEST_CAP":"2", "MRM_MONTHLY_REQUEST_CAP":"2"}
+        with tempfile.TemporaryDirectory() as tmp:
+            gw = LiveGateway(tmp, env=env, transport=lambda _: EXAMPLE, clock=lambda: 1000.0)
+            gw.drive(COORDS)
+            self.assertEqual(gw.status()["remaining_app_budget"], 1)
+            self.assertEqual(gw.status()["remaining_monthly_app_budget"], 1)
+            gw2 = LiveGateway(tmp, env=env, transport=lambda _: EXAMPLE, clock=lambda: 2000.0)
+            gw2.drive({**COORDS, "destination":"116.201,39.91"})
+            self.assertEqual(gw2.status()["remaining_monthly_app_budget"], 0)
+            gw3 = LiveGateway(tmp, env=env, transport=lambda _: EXAMPLE, clock=lambda: 3000.0)
+            with self.assertRaises(RateLimited):
+                gw3.drive({**COORDS, "destination":"116.202,39.91"})
+
+    def test_legacy_daily_counter_migrates_into_month_counter(self):
+        env = {"MRM_AMAP_WEB_KEY":"FAKE", "MRM_USAGE_AUTHORIZED":"YES",
+               "MRM_FREE_QUOTA_VERIFIED":"YES", "MRM_EXPLICIT_LIVE_OPT_IN":"YES",
+               "MRM_MONTHLY_REQUEST_CAP":"50"}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "local" / "amap_request_attempts.json"
+            path.parent.mkdir()
+            path.write_text(json.dumps({"day":datetime.now().astimezone().date().isoformat(),"count":7}))
+            gw = LiveGateway(tmp, env=env)
+            self.assertEqual(gw.status()["remaining_monthly_app_budget"], 43)
+
+    def test_map_initialization_has_separate_daily_and_monthly_hard_cap(self):
+        env = {"MRM_AMAP_WEB_KEY":"FAKE", "MRM_USAGE_AUTHORIZED":"YES",
+               "MRM_FREE_QUOTA_VERIFIED":"YES", "MRM_EXPLICIT_LIVE_OPT_IN":"YES",
+               "MRM_AMAP_JS_KEY":"FAKE_JS_KEY", "MRM_AMAP_JS_SECURITY":"FAKE_SECURITY",
+               "MRM_AMAP_MAP_OPT_IN":"YES"}
+        with tempfile.TemporaryDirectory() as tmp:
+            gw = LiveGateway(tmp, env=env)
+            self.assertTrue(gw.map_enabled())
+            self.assertEqual(gw.status()["remaining_map_initializations"], 30)
+            gw.reserve_map_initialization()
+            self.assertEqual(gw.status()["remaining_map_initializations"], 29)
+            again = LiveGateway(tmp, env=env)
+            self.assertEqual(again.status()["remaining_map_initializations"], 29)
+
+    def test_corrupt_monthly_counter_fails_closed(self):
+        env = {"MRM_AMAP_WEB_KEY":"FAKE", "MRM_USAGE_AUTHORIZED":"YES",
+               "MRM_FREE_QUOTA_VERIFIED":"YES", "MRM_EXPLICIT_LIVE_OPT_IN":"YES"}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "local" / "amap_request_attempts.json"
+            path.parent.mkdir()
+            path.write_text('{"day":"not-a-date","day_count":0,"month":"2026-11","month_count":0}')
+            gw = LiveGateway(tmp, env=env)
+            self.assertFalse(gw.status()["live_enabled"])
+            with self.assertRaises(Disabled):
+                gw.drive(COORDS)
+
 
 if __name__ == "__main__":
     unittest.main()

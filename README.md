@@ -4,7 +4,7 @@
 
 ## 启动
 
-Windows 10/11、macOS、Linux：需要 Python 3.10+，不需要 pip、npm、Node.js 或云服务。
+Windows 10/11、macOS、Linux：需要 Python 3.10+，不需要 pip、npm、Node.js 或云服务。Windows 用户可直接双击项目目录中的「启动看板.bat」，程序会启动本机服务并自动打开浏览器。也可在 PowerShell 运行：
 
 \`\`\`powershell
 python app.py

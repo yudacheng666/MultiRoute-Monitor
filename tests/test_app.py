@@ -7,10 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, ANY
 
 from amap_client import LiveGateway, ProviderError, RateLimited
-from app import ASSETS, make_server
+from app import ASSETS, main, make_server
 from setup_amap import authorization_path, save_private_keys
 
 
@@ -332,6 +332,25 @@ class AuthorizationHTTPTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertFalse(data["live_enabled"])
         self.assertFalse(self.server.gateway.status()["live_enabled"])
+
+
+class LauncherTests(unittest.TestCase):
+    def test_open_browser_flag_uses_only_local_dashboard_url(self):
+        fake=MagicMock()
+        fake.server_port=8876
+        fake.gateway.status.return_value={"live_enabled":False}
+        fake.__enter__.return_value=fake
+        fake.serve_forever.side_effect=KeyboardInterrupt
+        with patch("app.make_server",return_value=fake), \
+             patch("app.threading.Timer") as timer, \
+             patch("app.argparse.ArgumentParser.parse_args",
+                   return_value=type("Args",(),{"port":8876,"open_browser":True})()):
+            main()
+        timer.assert_called_once_with(1.0,ANY)
+        callback=timer.call_args.args[1]
+        with patch("app.webbrowser.open") as open_browser:
+            callback()
+            open_browser.assert_called_once_with("http://127.0.0.1:8876/")
 
 
 if __name__ == "__main__":

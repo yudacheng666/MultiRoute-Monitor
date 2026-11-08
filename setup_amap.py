@@ -67,6 +67,129 @@ def save_private_keys(root, values):
     return target
 
 
+
+AUTH_TICKET_PATTERN = re.compile(r"^[A-Za-z0-9_-]{4,80}$")
+AUTH_FLAGS_DISABLED = {
+    "MRM_USAGE_AUTHORIZED": "NO",
+    "MRM_FREE_QUOTA_VERIFIED": "NO",
+    "MRM_EXPLICIT_LIVE_OPT_IN": "NO",
+    "MRM_AMAP_MAP_OPT_IN": "NO",
+}
+
+
+def authorization_path(root):
+    return Path(root) / "local" / "amap_authorization.json"
+
+
+def _write_private_json(target, data):
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_symlink():
+        raise ValueError("私有配置路径不得是符号链接")
+    pending = target.with_suffix(".tmp")
+    if pending.is_symlink():
+        raise ValueError("临时路径不得是符号链接")
+    try:
+        fd = os.open(str(pending), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            json.dump(data, out, ensure_ascii=False)
+        os.replace(pending, target)
+        if os.name != "nt":
+            os.chmod(target, 0o600)
+    finally:
+        try:
+            pending.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def save_private_authorization(root, payload):
+    """Persist a local self-attestation only after the user confirms AMap approval.
+
+    The application cannot verify the provider's ticket or account-level usage.
+    It therefore requires explicit attestations and applies a 50% quota reserve.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("授权数据格式错误")
+    ticket = payload.get("ticket_id")
+    route_remaining = payload.get("route_quota_remaining")
+    map_remaining = payload.get("map_quota_remaining")
+    confirmations = (
+        "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"
+    )
+    if not isinstance(ticket, str) or not AUTH_TICKET_PATTERN.fullmatch(ticket.strip()):
+        raise ValueError("请填写有效的高德工单编号")
+    if any(payload.get(field) is not True for field in confirmations):
+        raise ValueError("必须确认高德书面许可、账户剩余额度、账号独占使用和费用风险")
+    for value, label in ((route_remaining, "驾车规划"), (map_remaining, "地图初始化")):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 2 or value > 100000000:
+            raise ValueError(label + "剩余免费额度必须是有效整数")
+    # Keep at least half of the user-reported remaining free quota unused.
+    route_monthly = min(30000, route_remaining // 2)
+    map_monthly = min(900, map_remaining // 2)
+    if route_monthly < 1 or map_monthly < 1:
+        raise ValueError("当前剩余额度不足，真实高德保持关闭")
+    route_daily = min(1000, max(1, route_monthly // 30))
+    map_daily = min(30, max(1, map_monthly // 30))
+    record = {
+        "enabled": True,
+        "ticket_id": ticket.strip(),
+        "route_quota_remaining_at_enable": route_remaining,
+        "map_quota_remaining_at_enable": map_remaining,
+        "route_daily_cap": route_daily,
+        "route_monthly_cap": route_monthly,
+        "map_daily_cap": map_daily,
+        "map_monthly_cap": map_monthly,
+        "approved_by_amap": True,
+        "quota_verified": True,
+        "account_exclusive": True,
+        "zero_cost_ack": True,
+    }
+    _write_private_json(authorization_path(root), record)
+    return record
+
+
+def disable_private_authorization(root):
+    """Persist an explicit off marker that overrides environment opt-in flags."""
+    _write_private_json(authorization_path(root), {"disabled": True})
+
+
+def read_private_authorization(root):
+    """Return only validated runtime switches; never return ticket/quota metadata."""
+    target = authorization_path(root)
+    try:
+        if target.is_symlink():
+            return dict(AUTH_FLAGS_DISABLED)
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    if data.get("disabled") is True:
+        return dict(AUTH_FLAGS_DISABLED)
+    ticket = data.get("ticket_id")
+    route_daily, route_monthly = data.get("route_daily_cap"), data.get("route_monthly_cap")
+    map_daily, map_monthly = data.get("map_daily_cap"), data.get("map_monthly_cap")
+    if (data.get("enabled") is not True
+            or not isinstance(ticket, str) or not AUTH_TICKET_PATTERN.fullmatch(ticket)
+            or any(data.get(field) is not True for field in (
+                "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"))
+            or not all(isinstance(v, int) and not isinstance(v, bool) and v > 0
+                       for v in (route_daily, route_monthly, map_daily, map_monthly))
+            or route_daily > 1000 or route_monthly > 30000
+            or map_daily > 30 or map_monthly > 900):
+        return {}
+    return {
+        "MRM_USAGE_AUTHORIZED": "YES",
+        "MRM_FREE_QUOTA_VERIFIED": "YES",
+        "MRM_EXPLICIT_LIVE_OPT_IN": "YES",
+        "MRM_AMAP_MAP_OPT_IN": "YES",
+        "MRM_DAILY_REQUEST_CAP": str(route_daily),
+        "MRM_MONTHLY_REQUEST_CAP": str(route_monthly),
+        "MRM_MAP_INIT_DAILY_CAP": str(map_daily),
+        "MRM_MAP_INIT_MONTHLY_CAP": str(map_monthly),
+    }
+
+
 def main():
     root = Path(__file__).resolve().parent
     print("MultiRoute-Monitor 高德本地配置（不会连接高德或启用真实请求）")

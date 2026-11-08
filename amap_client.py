@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlencode
-from setup_amap import read_private_keys
+from setup_amap import read_private_authorization, read_private_keys
 CHINA_TZ = timezone(timedelta(hours=8))
 
 ENDPOINT = "restapi.amap.com"
@@ -194,7 +194,7 @@ class LiveGateway:
         # Only normal local startup reads private keys. Offline tests injecting env={}
         # never see machine credentials. Permission/fee switches remain separate.
         if env is None:
-            env = {**read_private_keys(root), **os.environ}
+            env = {**read_private_keys(root), **os.environ, **read_private_authorization(root)}
         self.key = env.get("MRM_AMAP_WEB_KEY", "")
         self.js_key = env.get("MRM_AMAP_JS_KEY", "")
         self.js_security = env.get("MRM_AMAP_JS_SECURITY", "")
@@ -212,8 +212,8 @@ class LiveGateway:
         self.usage_file = local_dir / "amap_request_attempts.json"
         self.map_usage_file = local_dir / "amap_map_proxy_attempts.json"
         self.map_init_usage_file = local_dir / "amap_map_initialization_attempts.json"
-        self.map_init_daily_cap = MAP_INIT_DAILY_CAP
-        self.map_init_monthly_cap = MAP_INIT_MONTHLY_CAP
+        self.map_init_daily_cap = self._bounded_cap(env, "MRM_MAP_INIT_DAILY_CAP", MAP_INIT_DAILY_CAP, MAP_INIT_DAILY_CAP)
+        self.map_init_monthly_cap = self._bounded_cap(env, "MRM_MAP_INIT_MONTHLY_CAP", MAP_INIT_MONTHLY_CAP, MAP_INIT_MONTHLY_CAP)
         self.map_proxy_daily_cap = MAP_PROXY_DAILY_CAP
         self.map_proxy_monthly_cap = MAP_PROXY_MONTHLY_CAP
         try:
@@ -228,6 +228,14 @@ class LiveGateway:
         self.monthly_cap = min(MONTHLY_CAP, max(0, requested_monthly))
         if self.cap <= 0 or self.monthly_cap <= 0:
             self.enabled = False
+
+    @staticmethod
+    def _bounded_cap(env, name, default, hard_limit):
+        try:
+            value = int(env.get(name, str(default)))
+        except (TypeError, ValueError):
+            value = 0
+        return min(hard_limit, max(0, value))
 
     def _day(self):
         return datetime.now(CHINA_TZ).date().isoformat()

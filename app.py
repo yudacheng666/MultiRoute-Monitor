@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from amap_client import Disabled, LiveGateway, ProviderError, RateLimited, RouteInputError
 from map_proxy import PREFIX as MAP_PREFIX, prepare_proxy_path, proxy_get
+from setup_amap import disable_private_authorization, save_private_authorization
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -134,7 +135,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(403, b"Host not allowed")
             return
         path = urlsplit(self.path).path
-        if path not in ("/api/amap/drive", "/api/amap/map-init"):
+        allowed_paths = ("/api/amap/drive", "/api/amap/map-init",
+                         "/api/amap/authorize", "/api/amap/disable")
+        if path not in allowed_paths:
             self._send(405, b"Not allowed")
             return
         # Fail closed on local cross-site requests, including browser forms.
@@ -149,8 +152,44 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = -1
-        if length < 0 or length > 2048 or (path == "/api/amap/drive" and length < 1):
+        if length < 0 or length > 4096 or (path == "/api/amap/drive" and length < 1):
             self._json(413, {"error": "请求内容长度不合法"})
+            return
+        if path in ("/api/amap/authorize", "/api/amap/disable"):
+            payload = {}
+            if length:
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    self._json(400, {"error": "设置内容格式错误"})
+                    return
+            if not isinstance(payload, dict):
+                self._json(400, {"error": "设置内容格式错误"})
+                return
+            try:
+                if path == "/api/amap/disable":
+                    disable_private_authorization(self.server.root)
+                else:
+                    if not (self.server.gateway.key and self.server.gateway.js_key
+                            and self.server.gateway.js_security):
+                        self._json(400, {"error": "请先在本机配置 Web服务 Key、JS API Key 和 JS安全密钥"})
+                        return
+                    save_private_authorization(self.server.root, payload)
+                self.server.gateway = LiveGateway(self.server.root)
+                status = self.server.gateway.status()
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+                return
+            except OSError:
+                self._json(503, {"error": "本机授权设置无法保存"})
+                return
+            self._json(200, {
+                "ok": True,
+                "live_enabled": status["live_enabled"],
+                "js_map_enabled": status["js_map_enabled"],
+                "remaining_app_budget": status["remaining_app_budget"],
+                "remaining_monthly_app_budget": status["remaining_monthly_app_budget"],
+            })
             return
         if path == "/api/amap/map-init":
             if length:
@@ -180,6 +219,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.server.gateway.status()["live_enabled"]:
             self._json(403, {"error": "真实高德模式未启用或已达到额度限制"})
             return
+        if length < 1:
+            self._json(413, {"error": "请求内容长度不合法"})
+            return
         try:
             data = json.loads(self.rfile.read(length))
             response = self.server.gateway.drive(data)
@@ -201,9 +243,10 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-def make_server(port=8876, gateway=None):
+def make_server(port=8876, gateway=None, root=ROOT):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    server.gateway = gateway if gateway is not None else LiveGateway(ROOT)
+    server.root = Path(root).resolve()
+    server.gateway = gateway if gateway is not None else LiveGateway(server.root)
     return server
 
 

@@ -69,7 +69,7 @@
   <dialog id="route-dialog" aria-labelledby="dialog-title">
     <form id="route-form" class="route-form">
       <div class="dialog-head"><div><div class="eyebrow">ROUTE CONFIGURATION</div><h2 id="dialog-title">添加模拟路线</h2></div><button id="dialog-close" class="icon-btn" type="button" aria-label="关闭">×</button></div>
-      <p class="dialog-help">显示名称和基础模拟时间保存在浏览器。真实查询需填写高德 GCJ-02 经纬度；地址仅用于显示，不会自动发送地理编码请求。未经服务端授权启用，不会发送到高德。</p>
+      <p class="dialog-help">显示名称和基础模拟时间保存在浏览器。真实查询需填写高德 GCJ-02 经纬度；地址仅用于显示，不会自动发送地理编码请求。<a href="https://lbs.amap.com/tools/picker" target="_blank" rel="noopener noreferrer">打开高德官方坐标拾取器</a>，复制起点、终点经纬度后粘贴到下方。未经服务端授权启用，不会发送到高德。</p>
       <label>路线名称<input name="name" maxlength="36" required placeholder="例如：测试路线 E" autocomplete="off"></label>
       <div class="form-two"><label>起点名称/完整地址<input name="origin" maxlength="60" required placeholder="例如：虚构起点" autocomplete="off"></label>
       <label>终点名称/完整地址<input name="destination" maxlength="60" required placeholder="例如：虚构终点" autocomplete="off"></label></div>

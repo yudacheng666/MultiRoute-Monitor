@@ -122,6 +122,22 @@ class DriverTests(unittest.TestCase):
             again = LiveGateway(tmp, env=env)
             self.assertEqual(again.status()["remaining_map_proxy_budget"], 499)
 
+    def test_last_map_initialization_does_not_block_its_proxy_resources(self):
+        env = {"MRM_AMAP_WEB_KEY":"LOCAL_FAKE_WEB_KEY",
+               "MRM_USAGE_AUTHORIZED":"YES","MRM_FREE_QUOTA_VERIFIED":"YES",
+               "MRM_EXPLICIT_LIVE_OPT_IN":"YES","MRM_AMAP_JS_KEY":"LOCAL_FAKE_JS_KEY",
+               "MRM_AMAP_JS_SECURITY":"LOCAL_FAKE_SECURITY","MRM_AMAP_MAP_OPT_IN":"YES",
+               "MRM_MAP_INIT_DAILY_CAP":"1","MRM_MAP_INIT_MONTHLY_CAP":"1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            gateway=LiveGateway(tmp,env=env)
+            self.assertTrue(gateway.status()["js_map_enabled"])
+            gateway.reserve_map_initialization()
+            self.assertFalse(gateway.status()["js_map_enabled"])
+            # The one allowed map must still be able to fetch its style/resources.
+            self.assertTrue(gateway.map_enabled())
+            gateway.reserve_map_proxy()
+            self.assertEqual(gateway.status()["remaining_map_proxy_budget"],499)
+
     def test_needs_all_three_authorization_flags(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {"MRM_AMAP_WEB_KEY": "FAKE", "MRM_USAGE_AUTHORIZED": "YES",

@@ -348,17 +348,20 @@ class LiveGateway:
                     "month": self._month(), "month_count": 0}, False
 
     def map_enabled(self):
+        """Whether the map proxy itself can serve resources for an existing map.
+
+        New map instances are separately gated by reserve_map_initialization().
+        Do not make the last permitted map's own resource requests fail after
+        its initialization counter is consumed.
+        """
         if not (self.enabled and self.map_explicit and self.js_key and self.js_security):
             return False
-        init_usage, init_ok = self._safe_usage(self.map_init_usage_file)
         proxy_usage, proxy_ok = self._safe_usage(self.map_usage_file)
-        if not init_ok or not proxy_ok:
+        if not proxy_ok:
             return False
-        init_day, init_month = self._remaining(
-            init_usage, self.map_init_daily_cap, self.map_init_monthly_cap)
         proxy_day, proxy_month = self._remaining(
             proxy_usage, self.map_proxy_daily_cap, self.map_proxy_monthly_cap)
-        return min(init_day, init_month, proxy_day, proxy_month) > 0
+        return proxy_day > 0 and proxy_month > 0
 
     def reserve_map_initialization(self):
         if not self.map_enabled():

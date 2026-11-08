@@ -15,7 +15,7 @@
   const state = { routes: [], measured: {}, interval: 10, paused: false, timer: null,
     nextAt: null, editing: null, toastTimer: null,
     liveReady: false, liveReadings: {}, liveErrors: {}, liveLoading: {},
-    mapEnabled: false, mapKey: null };
+    mapEnabled: false, mapKey: null, liveAuto: false, liveBatch: false };
 
   function escapeHTML(value) {
     return String(value).replace(/[&<>"']/g, function (x) {
@@ -120,13 +120,14 @@
   }
   function requestReal(id) {
     const route = state.routes.find(function(r){return r.id===id;});
-    if (!state.liveReady || !route || !route.origin_coord || !route.destination_coord || state.liveLoading[id]) return;
+    if (!state.liveReady || !route || !route.origin_coord || !route.destination_coord || state.liveLoading[id])
+      return Promise.resolve(false);
     state.liveLoading[id] = true;
     delete state.liveErrors[id];
     render();
     const req = {origin:route.origin_coord,destination:route.destination_coord};
     if(route.waypoint_coord)req.waypoints=[route.waypoint_coord];
-    fetch('/api/amap/drive',{method:'POST',headers:{'Content-Type':'application/json','X-MRM-Request':'1'},
+    return fetch('/api/amap/drive',{method:'POST',headers:{'Content-Type':'application/json','X-MRM-Request':'1'},
       body:JSON.stringify(req),cache:'no-store'}).then(async function(response) {
         const payload=await response.json();
         if(!response.ok)throw new Error(payload.error || '高德查询失败');
@@ -137,12 +138,37 @@
           current.waypoint_coord===route.waypoint_coord) {
           state.liveReadings[id]=payload;
         }
+        return true;
       }).catch(function(error) {
         delete state.liveReadings[id];
         state.liveErrors[id]=String(error.message||'请求失败').slice(0,90);
+        return false;
       }).finally(function() {
         delete state.liveLoading[id];render();
       });
+  }
+  async function refreshLiveAll(automatic) {
+    if (!state.liveReady || state.liveBatch) return;
+    const targets=state.routes.filter(function(r){return r.origin_coord && r.destination_coord;});
+    if (!targets.length) {
+      if(!automatic)showToast('请先编辑路线并填写高德经纬度');
+      return;
+    }
+    state.liveBatch=true;
+    const button=document.getElementById('refresh-live-all');
+    if(button)button.disabled=true;
+    try {
+      for(let i=0;i<targets.length;i+=1) {
+        if(automatic && (!state.liveAuto || state.paused))break;
+        await requestReal(targets[i].id);
+        if(i<targets.length-1)await new Promise(resolve=>setTimeout(resolve,2100));
+      }
+    } finally {
+      state.liveBatch=false;
+      if(button)button.disabled=false;
+      if(!automatic)showToast('高德路线查询批次已完成；请查看各路线结果');
+      detectLiveAvailability();
+    }
   }
   function render() {
     const data = state.routes.map(function (route) {
@@ -194,18 +220,24 @@
     if (state.paused) { note.textContent = '自动刷新已暂停 · 可手动刷新'; return; }
     if (state.nextAt) {
       const remain = Math.max(0, Math.ceil((state.nextAt-Date.now())/1000));
-      note.textContent = '下一次模拟刷新约 ' + Math.ceil(remain / 60) + ' 分钟后';
+      const prefix=state.liveAuto && state.liveReady ? '下一批高德真实路况查询约 ' :
+        (state.liveReady ? '模拟数据刷新；真实路况需手动查询 · 下一次模拟刷新约 ' : '下一次模拟刷新约 ');
+      note.textContent = prefix + Math.ceil(remain / 60) + ' 分钟后';
     }
   }
   function setupTimer() {
-    if (state.timer) { clearInterval(state.timer); state.timer = null; }
-    if (!state.paused) {
-      state.nextAt = Date.now() + state.interval * 60000;
-      state.timer = setInterval(function () {
-        refreshAll(true);
-        state.nextAt = Date.now() + state.interval * 60000;
-      }, state.interval * 60000);
-    } else state.nextAt = null;
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+    const schedule=function() {
+      if(state.paused)return;
+      state.nextAt=Date.now()+state.interval*60000;
+      state.timer=setTimeout(async function() {
+        if(state.liveAuto && state.liveReady)await refreshLiveAll(true);
+        else refreshAll(true);
+        schedule();
+      },state.interval*60000);
+    };
+    if (!state.paused) schedule();
+    else state.nextAt = null;
     pauseButton.textContent = state.paused ? '继续' : '暂停';
     pauseButton.setAttribute('aria-pressed', state.paused ? 'true' : 'false');
     ticker();
@@ -314,19 +346,30 @@
       return r.json();
     }).then(function(x) {
       state.liveReady = x.live_enabled === true;
+      if(!state.liveReady)state.liveAuto=false;
       state.mapEnabled = state.liveReady && x.js_map_enabled === true;
       state.mapKey = state.mapEnabled ? x.js_map_key : null;
       const label=document.getElementById('amap-status');
+      const batchButton=document.getElementById('refresh-live-all');
+      const autoWrap=document.getElementById('live-auto-wrap');
+      const autoToggle=document.getElementById('live-auto-refresh');
+      batchButton.hidden=!state.liveReady;
+      autoWrap.hidden=!state.liveReady;
+      autoToggle.checked=state.liveAuto;
       label.textContent=state.liveReady ?
-        ('高德真实接口已授权 · 仅手动查询 · 本程序剩余额度 '+x.remaining_app_budget+
-         ' 次 · 未查询路线仍为模拟' + (state.mapEnabled?' · 地图需手动打开':'')) :
+        ('高德真实接口已授权 · 今日剩余 '+x.remaining_app_budget+' 次 · 本月剩余 '+x.remaining_monthly_app_budget+
+         ' 次 · 地图初始化今日/本月剩余 '+x.remaining_map_initializations+'/'+x.remaining_monthly_map_initializations+
+         ' 次 · 未配置坐标路线仍为模拟') :
         '高德实时接口：未授权启用 · 当前仅显示模拟数据';
       if(state.liveReady) {
         document.querySelector('.mock-flag').textContent='高德接入已就绪 · 未查询路线为模拟';
         document.querySelector('footer span:last-child').textContent=
-          'M1-B 候选 · 高德为手动单次查询 · 地图需手动打开';
+          'M1-B · 高德手动/可选自动刷新 · 地图按需加载';
+      } else {
+        document.querySelector('.mock-flag').textContent='模拟模式 · 非真实路况';
       }
       render();
+      setupTimer();
     }).catch(function() {
       state.liveReady=false;
       document.getElementById('amap-status').textContent='高德接口状态不可用 · 保持模拟模式';
@@ -338,6 +381,12 @@
     intervalSelect.value = String(state.interval);
     document.getElementById('add-route').addEventListener('click', function () {openDialog(null);});
     document.getElementById('refresh-all').addEventListener('click', function () {refreshAll(false);});
+    document.getElementById('refresh-live-all').addEventListener('click', function () {refreshLiveAll(false);});
+    document.getElementById('live-auto-refresh').addEventListener('change', function(e) {
+      state.liveAuto=!!e.target.checked && state.liveReady;
+      setupTimer();
+      showToast(state.liveAuto?'已开启高德真实路况自动刷新；将按所选间隔逐条查询':'已关闭高德真实路况自动刷新');
+    });
     pauseButton.addEventListener('click', function () {state.paused=!state.paused; setupTimer();});
     intervalSelect.addEventListener('change', function () {
       state.interval = Core.safeInterval(intervalSelect.value);

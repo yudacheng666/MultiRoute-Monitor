@@ -31,19 +31,19 @@ jobs:
       - name: Build clean ZIP and SHA256
         shell: bash
         run: |
-          VERSION="\${GITHUB_REF_NAME#release/}"
-          ZIP="MultiRoute-Monitor-\${VERSION}-Windows.zip"
-          git archive --format=zip --prefix="MultiRoute-Monitor-\${VERSION}/" "\${GITHUB_SHA}" -o "\${ZIP}"
-          sha256sum "\${ZIP}" > "\${ZIP}.sha256"
-          printf '%s\n' "\${ZIP}" > release-asset-name.txt
+          VERSION="${GITHUB_REF_NAME#release/}"
+          ZIP="MultiRoute-Monitor-${VERSION}-Windows.zip"
+          git archive --format=zip --prefix="MultiRoute-Monitor-${VERSION}/" "${GITHUB_SHA}" -o "${ZIP}"
+          sha256sum "${ZIP}" > "${ZIP}.sha256"
+          printf '%s\n' "${ZIP}" > release-asset-name.txt
       - name: Publish the single final GitHub Release
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          VERSION="\${GITHUB_REF_NAME#release/}"
+          VERSION="${GITHUB_REF_NAME#release/}"
           ZIP="$(cat release-asset-name.txt)"
-          gh release create "\${VERSION}" "\${ZIP}" "\${ZIP}.sha256" \
-            --target "\${GITHUB_SHA}" \
-            --title "MultiRoute-Monitor \${VERSION}" \
+          gh release create "${VERSION}" "${ZIP}" "${ZIP}.sha256" \
+            --target "${GITHUB_SHA}" \
+            --title "MultiRoute-Monitor ${VERSION}" \
             --notes "Final Windows-ready MultiRoute-Monitor build. All automated tests passed on this exact commit. Local secrets and local data are excluded. Real AMap calls remain disabled until the user confirms written permission and account-level free quota in the in-app authorization gate."

@@ -6,11 +6,11 @@
 
 Windows 10/11、macOS、Linux：需要 Python 3.10+，不需要 pip、npm、Node.js 或云服务。Windows 用户可直接双击项目目录中的「启动看板.bat」，程序会启动本机服务并自动打开浏览器。也可在 PowerShell 运行：
 
-\`\`\`powershell
+```powershell
 python app.py
-\`\`\`
+```
 
-浏览器访问 \`http://127.0.0.1:8876/\`。默认只监听本机，不对局域网或公网开放。端口 8876 与 SRM 的 8765 分离。按 Ctrl+C 停止。
+浏览器访问 `http://127.0.0.1:8876/`。默认只监听本机，不对局域网或公网开放。端口 8876 与 SRM 的 8765 分离。按 Ctrl+C 停止。
 
 首次显示 4 条明确标记的虚构示例路线。用户在浏览器中编辑/添加真实路线名称和起终点，并填写高德 GCJ-02 经纬度，最多 6 条。路线配置保存在浏览器 localStorage；服务端不保存地址或路线响应。获取高德坐标可使用[官方坐标拾取器](https://lbs.amap.com/tools/picker)；中国大陆需使用高德坐标（GCJ-02），经度在前、纬度在后。
 
@@ -36,7 +36,7 @@ python app.py
 
 ## 本机密钥
 
-已有密钥可由项目根目录运行 \`python setup_amap.py\` 录入：Web 服务 Key、Web 端 JS API Key、JS 安全密钥。输入不回显，保存在 \`local/amap_keys.json\`。用户已配置时无需重做。授权状态与用量计数保存在同一 \`local/\` 目录，整个目录已被 Git 忽略。
+已有密钥可由项目根目录运行 `python setup_amap.py` 录入：Web 服务 Key、Web 端 JS API Key、JS 安全密钥。输入不回显，保存在 `local/amap_keys.json`。用户已配置时无需重做。授权状态与用量计数保存在同一 `local/` 目录，整个目录已被 Git 忽略。
 
 服务端自动实现同源安全代理，不需要安装 Nginx。JS 安全密钥只保存在本机后端；JS API Key 按官方要求在浏览器加载地图时可见。地图只在真实路线查询成功后，用户再次点击该路线的「查看高德地图」时初始化。
 
@@ -51,17 +51,17 @@ python app.py
 
 ## 自动化测试
 
-\`\`\`sh
+```sh
 python -m unittest discover -s tests -p "test_*.py" -v
 node --test tests/test_core.cjs tests/test_amap_map.cjs
-\`\`\`
+```
 
 完整 Chromium E2E 由 GitHub Actions 在 Windows、Ubuntu 和 Ubuntu 24.04 执行。测试使用模拟高德响应和 mock HTTPS，不使用真实 Key、不访问高德。
 
 ## 项目治理
 
-- \`AGENTS.md\`：AI 开发规则。
-- \`docs/REQUIREMENTS.md\`：需求和验收标准。
-- \`docs/DECISIONS.md\`：架构决定。
-- \`docs/PROJECT_STATE.md\`：当前准确状态。
+- `AGENTS.md`：AI 开发规则。
+- `docs/REQUIREMENTS.md`：需求和验收标准。
+- `docs/DECISIONS.md`：架构决定。
+- `docs/PROJECT_STATE.md`：当前准确状态。
 - M1-B 保持 Draft PR，未获用户批准前不合并 main。

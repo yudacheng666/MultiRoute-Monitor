@@ -42,7 +42,7 @@ async function main() {
     assert.equal(await page.locator('.sim-chip').count(),4);
     assert.equal(await page.locator('.schematic svg').count(),4);
 
-    await page.getByRole('button',{name:'刷新全部'}).click();
+    await page.getByRole('button',{name:'刷新模拟数据'}).click();
     assert.match(await page.locator('#toast').innerText(),/已刷新 4 条模拟路线/);
 
     await page.getByRole('button',{name:'添加路线'}).click();

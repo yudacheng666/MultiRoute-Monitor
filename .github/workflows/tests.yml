@@ -1,4 +1,4 @@
-name: M1-A tests
+name: M1-B full validation
 on:
   pull_request:
     paths-ignore:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   unit:
-    name: Python and Node (${{ matrix.os }})
+    name: Python HTTP integration and Node tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

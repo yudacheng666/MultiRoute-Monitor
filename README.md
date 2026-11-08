@@ -42,7 +42,7 @@ python setup_amap.py
 ## 测试
 ```sh
 python -m unittest discover -s tests -p "test_*.py" -v
-node --test tests/test_core.cjs
+node --test tests/test_core.cjs tests/test_amap_map.cjs
 ```
 
 真浏览器 E2E：`npm install --no-save --no-package-lock playwright@1.56.1` 后 `npx playwright install chromium`，运行 `node tests/test_browser.cjs`。GitHub Actions 将在 PR 的准确 SHA 上运行跨平台单元测试及 Chromium 测试。

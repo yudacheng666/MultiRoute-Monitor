@@ -38,3 +38,10 @@
 - [ ] 小额度真实接口，确认 response 结构、路线形状、TMC 颜色及路径规划语义。
 - [ ] 用户 Windows 本机功能与费用验收。
 - [ ] PR #3 通过准确 SHA CI、用户审批后才能合并 main。
+
+
+## 2026-11-08｜代理路由与集成验收
+- 按高德官方 JS API 2.0 安全密钥文档，地图样式 /v4/map/styles 单独固定转发 webapi.amap.com，其他允许的 /v3/*、/v4/* Web Service 路径固定转发 restapi.amap.com。不接受客户端指定上游。
+- /_AMapService/ 请求仅 GET；本机 host 校验、Sec-Fetch-Site 跨站阻断、代理调用日上限、服务端注入 jscode、不跟随重定向、8秒超时、响应 1MB 上限和 MIME 白名单。
+- 代理的完整 HTTP 路由测试使用假网关和 mock 上游，不会触发真实请求。真实地图资源/版权/Key域名白名单尚未验收。
+- CI SHA 5a192a4dba94e4e92a1e4b7ca40dd93e1d0b7e19：Windows/Ubuntu Python 45/45 + Node 10/10，Chromium E2E 通过；Actions #42450312426 3/3 SUCCESS。

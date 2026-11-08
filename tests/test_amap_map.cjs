@@ -38,3 +38,33 @@ test('invalid key cannot load any external script',async()=>{
   await assert.rejects(api.load('invalid key',w,d));
   assert.equal(used,0);
 });
+
+test('JS API loader sets the same-origin security proxy before appending the official script',async()=>{
+  const events=[];
+  const w={location:{origin:'http://127.0.0.1:8876'}};
+  let script;
+  const d={
+    createElement(name){
+      assert.equal(name,'script');
+      script={async:false,onload:null,onerror:null,remove(){}};
+      Object.defineProperty(script,'src',{
+        set(value){this._src=value;events.push('src');},
+        get(){return this._src;}
+      });
+      return script;
+    },
+    head:{appendChild(el){
+      events.push('append');
+      assert.deepEqual(w._AMapSecurityConfig,{
+        serviceHost:'http://127.0.0.1:8876/_AMapService'
+      });
+      w.AMap={Map:function FakeMap(){}};
+      el.onload();
+    }}
+  };
+  const loaded=await api.load('PUBLIC_JS_KEY_123',w,d);
+  assert.equal(loaded,w.AMap);
+  assert.deepEqual(events,['src','append']);
+  assert.match(script.src,/^https:\/\/webapi\.amap\.com\/maps\?v=2\.0&key=PUBLIC_JS_KEY_123$/);
+  assert.equal(Object.hasOwn(w._AMapSecurityConfig,'securityJsCode'),false);
+});

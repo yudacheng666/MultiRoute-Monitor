@@ -59,3 +59,13 @@
 - Python 网关现在可在正常启动时读取本地私有文件；单元测试注入独立环境不会读取真实密钥。配置文件不会写任何许可或真实调用开启标志，**输入 Key 后仍完全模拟，不产生网络请求**。
 - 地图安全码代理前次已开发，当前官网示例要求样式走 webapi.amap.com、其他服务走 restapi.amap.com，代码采用固定双域名且不接受用户指定任意上游。
 - 该新一轮 PR 产品 SHA 和 CI 结果待按 GitHub 实际执行核验。PR #3 保持 Draft，main 仍 M1-A；用户本人需要的下一操作仅在发布 ZIP 后运行 Key 配置向导。
+
+
+## 2026-11-08｜代理 HTTP 集成与跨平台回归（离线）
+- 按高德 JS API 2.0 官方安全密钥文档复核代理路径：/_AMapService/v4/map/styles 固定转发 webapi.amap.com/v4/map/styles；/_AMapService/ 其余 Web Service 资源固定转发 restapi.amap.com/。官方说明：https://lbs.amap.com/api/javascript-api-v2/guide/abc/jscode 。
+- 代理路径允许安全的版本化 /v3/*、/v4/* Web Service 资源，样式路径优先匹配独立上游；仍禁止 scheme/netloc/fragment、反斜线、路径穿越、编码分隔符、调用者覆盖 jscode/callback、非白名单内容类型、超限响应及重定向跟随。
+- 新增实际本地 HTTP server 集成测试：启用态样式/服务请求、服务端注入 jscode、跨站拒绝、非法路径拒绝、预算拒绝、上游失败不泄密、HEAD 拒绝；测试传输全部 mock，不访问高德。
+- 新增代理响应大小/Content-Length/Content-Type/redirect 测试，以及 JS API loader 在追加官方脚本前配置 same-origin serviceHost、浏览器配置不含 securityJsCode 的 Node 测试。
+- 受测产品 SHA：5a192a4dba94e4e92a1e4b7ca40dd93e1d0b7e19。Actions #42450312426 3/3 SUCCESS：Windows 45 Python tests + 10 Node tests；Ubuntu 45 Python tests + 10 Node tests；Ubuntu 24.04 Chromium E2E PASS。
+- 该轮前两个迭代 CI 捕获并修复了测试夹具 Content-Length 行为和旧路径白名单断言，最终 SHA 全绿。CI 全程使用虚构响应和 mock HTTPS，不触发真实高德请求。
+- main 仍为 bb8287f040ae6e5e83709275e5daf28e4ff4bae9（M1-A），PR #3 仍 Draft / unmerged。真实高德账号、许可、地图底图及真实 ETA/TMC 仍未实测；不得把离线 CI PASS 说成真实地图上线。

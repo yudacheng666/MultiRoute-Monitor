@@ -224,7 +224,7 @@ class MapProxyHTTPIntegrationTests(unittest.TestCase):
         transport.assert_not_called()
 
     def test_map_initialization_endpoint_denied_by_default(self):
-        payload = json.dumps({})
+        self.server.gateway = LiveGateway(Path("."), env={})
         headers = {"Origin":"http://127.0.0.1:%s" % self.port,
                    "X-MRM-Request":"1", "Content-Type":"application/json"}
         code, _, _ = self.request("/api/amap/map-init", method="POST",

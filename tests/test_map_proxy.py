@@ -55,7 +55,7 @@ class MapProxyTests(unittest.TestCase):
             def read(self, n):
                 return b'{"status":"1"}'
             def getheader(self, name, default=None):
-                return "application/json"
+                return "application/json" if name == "Content-Type" else None
         class FakeHTTPS:
             def __init__(self, host, timeout):
                 calls.append(("connect", host, timeout))

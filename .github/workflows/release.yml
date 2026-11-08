@@ -6,12 +6,14 @@ on:
 permissions:
   contents: write
 jobs:
-  validate-and-publish:
-    runs-on: ubuntu-24.04
+  validate:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -22,12 +24,29 @@ jobs:
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Node tests
         run: node --test tests/test_core.cjs tests/test_amap_map.cjs
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Install browser test tooling
         run: npm install --no-save --no-package-lock playwright@1.56.1
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Chromium end-to-end tests
         run: node tests/test_browser.cjs
+  publish:
+    needs: [validate, browser]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build clean ZIP and SHA256
         shell: bash
         run: |
@@ -43,7 +62,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#release/}"
           ZIP="$(cat release-asset-name.txt)"
-          gh release create "${VERSION}" "${ZIP}" "${ZIP}.sha256" \
-            --target "${GITHUB_SHA}" \
-            --title "MultiRoute-Monitor ${VERSION}" \
-            --notes "Final Windows-ready MultiRoute-Monitor build. All automated tests passed on this exact commit. Local secrets and local data are excluded. Real AMap calls remain disabled until the user confirms written permission and account-level free quota in the in-app authorization gate."
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            gh release upload "${VERSION}" "${ZIP}" "${ZIP}.sha256" --clobber
+          else
+            gh release create "${VERSION}" "${ZIP}" "${ZIP}.sha256" \
+              --target "${GITHUB_SHA}" \
+              --title "MultiRoute-Monitor ${VERSION}" \
+              --notes "Final Windows-ready MultiRoute-Monitor build. Windows, Ubuntu and Chromium tests passed on this exact commit. Local secrets and local data are excluded. Real AMap calls remain disabled until written permission and account-level free quota are confirmed in the in-app gate."
+          fi

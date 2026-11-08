@@ -139,7 +139,8 @@ class DriverTests(unittest.TestCase):
 
     def test_rapid_repeat_blocked(self):
         env = {"MRM_AMAP_WEB_KEY": "FAKE", "MRM_USAGE_AUTHORIZED": "YES",
-               "MRM_FREE_QUOTA_VERIFIED": "YES", "MRM_EXPLICIT_LIVE_OPT_IN": "YES"}
+               "MRM_FREE_QUOTA_VERIFIED": "YES", "MRM_EXPLICIT_LIVE_OPT_IN": "YES",
+               "MRM_DAILY_REQUEST_CAP": "100"}
         with tempfile.TemporaryDirectory() as tmp:
             now = [1000.0]
             gw = LiveGateway(tmp, env=env, transport=lambda p: EXAMPLE, clock=lambda: now[0])
@@ -151,7 +152,8 @@ class DriverTests(unittest.TestCase):
 
     def test_provider_error_attempt_still_counts(self):
         env = {"MRM_AMAP_WEB_KEY": "FAKE", "MRM_USAGE_AUTHORIZED": "YES",
-               "MRM_FREE_QUOTA_VERIFIED": "YES", "MRM_EXPLICIT_LIVE_OPT_IN": "YES"}
+               "MRM_FREE_QUOTA_VERIFIED": "YES", "MRM_EXPLICIT_LIVE_OPT_IN": "YES",
+               "MRM_DAILY_REQUEST_CAP": "100"}
         with tempfile.TemporaryDirectory() as tmp:
             gw = LiveGateway(tmp, env=env, transport=lambda p: {"status": "0"},
                              clock=lambda: 1000.0)

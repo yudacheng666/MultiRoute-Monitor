@@ -228,7 +228,7 @@ class MapProxyHTTPIntegrationTests(unittest.TestCase):
         headers = {"Origin":"http://127.0.0.1:%s" % self.port,
                    "X-MRM-Request":"1", "Content-Type":"application/json"}
         code, _, _ = self.request("/api/amap/map-init", method="POST",
-                                  body=payload, headers=headers)
+                                  headers=headers)
         self.assertEqual(code, 403)
 
     def test_map_initialization_endpoint_counts_only_authorized_local_request(self):

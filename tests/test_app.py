@@ -6,7 +6,9 @@ import threading
 import unittest
 from pathlib import Path
 
-from amap_client import LiveGateway
+from unittest.mock import patch
+
+from amap_client import LiveGateway, ProviderError, RateLimited
 from app import ASSETS, make_server
 
 
@@ -94,6 +96,132 @@ class LocalServerTests(unittest.TestCase):
         self.assertIn("connect-src 'self'", headers["Content-Security-Policy"])
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(headers["Cross-Origin-Resource-Policy"], "same-origin")
+
+
+class EnabledMapGateway:
+    """Synthetic gateway used only by offline HTTP integration tests."""
+    js_security = "PRIVATE_TEST_SECURITY"
+
+    def __init__(self, fail_budget=False):
+        self.reservations = 0
+        self.fail_budget = fail_budget
+
+    def map_enabled(self):
+        return True
+
+    def reserve_map_proxy(self):
+        if self.fail_budget:
+            raise RateLimited("fixture budget exhausted")
+        self.reservations += 1
+
+
+class MapProxyHTTPIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.gateway = EnabledMapGateway()
+        self.server = make_server(0, gateway=self.gateway)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.port = self.server.server_port
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+
+    def request(self, path, headers=None, method="GET"):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        values = {"Host": "127.0.0.1:%s" % self.port}
+        values.update(headers or {})
+        conn.request(method, path, headers=values)
+        response = conn.getresponse()
+        result = response.status, dict(response.getheaders()), response.read()
+        conn.close()
+        return result
+
+    def test_enabled_style_route_injects_server_secret_and_returns_safe_response(self):
+        fixture = b'{"style":"fixture-only"}'
+        with patch("app.proxy_get", return_value=(fixture, "application/json")) as transport:
+            code, headers, body = self.request(
+                "/_AMapService/v4/map/styles?key=PUBLIC_JS_KEY&style=dark",
+                {"Sec-Fetch-Site": "same-origin"},
+            )
+        self.assertEqual(code, 200)
+        self.assertEqual(body, fixture)
+        self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(self.gateway.reservations, 1)
+        prepared = transport.call_args.args[0]
+        self.assertTrue(prepared.startswith("/v4/map/styles?"))
+        self.assertIn("jscode=PRIVATE_TEST_SECURITY", prepared)
+        self.assertIn("key=PUBLIC_JS_KEY", prepared)
+        self.assertNotIn(b"PRIVATE_TEST_SECURITY", body)
+        self.assertNotIn("PRIVATE_TEST_SECURITY", str(headers))
+
+    def test_enabled_web_service_route_uses_same_backend_integration(self):
+        with patch("app.proxy_get", return_value=(b"{}", "application/json")) as transport:
+            code, _, body = self.request(
+                "/_AMapService/v3/assistant/inputtips?keywords=fixture",
+                {"Sec-Fetch-Site": "same-origin"},
+            )
+        self.assertEqual(code, 200)
+        self.assertEqual(body, b"{}")
+        self.assertIn("jscode=PRIVATE_TEST_SECURITY", transport.call_args.args[0])
+        self.assertEqual(self.gateway.reservations, 1)
+
+    def test_cross_site_map_request_is_rejected_before_budget_or_transport(self):
+        with patch("app.proxy_get") as transport:
+            code, _, _ = self.request(
+                "/_AMapService/v4/map/styles?key=PUBLIC",
+                {"Sec-Fetch-Site": "cross-site"},
+            )
+        self.assertEqual(code, 403)
+        self.assertEqual(self.gateway.reservations, 0)
+        transport.assert_not_called()
+
+    def test_invalid_path_or_caller_supplied_secret_is_rejected_before_transport(self):
+        for path in (
+            "/_AMapService/v3/assistant/../inputtips",
+            "/_AMapService/v3/assistant/inputtips?jscode=ATTACKER",
+            "/_AMapService/https://evil.example/path",
+        ):
+            with self.subTest(path=path), patch("app.proxy_get") as transport:
+                code, _, body = self.request(path, {"Sec-Fetch-Site": "same-origin"})
+                self.assertEqual(code, 400)
+                self.assertNotIn(b"PRIVATE_TEST_SECURITY", body)
+                transport.assert_not_called()
+        self.assertEqual(self.gateway.reservations, 0)
+
+    def test_budget_exhaustion_returns_429_without_upstream_request(self):
+        self.gateway.fail_budget = True
+        with patch("app.proxy_get") as transport:
+            code, _, body = self.request(
+                "/_AMapService/v4/map/styles?key=PUBLIC",
+                {"Sec-Fetch-Site": "same-origin"},
+            )
+        self.assertEqual(code, 429)
+        self.assertNotIn(b"PRIVATE_TEST_SECURITY", body)
+        transport.assert_not_called()
+
+    def test_upstream_failure_returns_generic_502_without_secret(self):
+        with patch("app.proxy_get", side_effect=ProviderError("fixture failure")):
+            code, _, body = self.request(
+                "/_AMapService/v4/map/styles?key=PUBLIC",
+                {"Sec-Fetch-Site": "same-origin"},
+            )
+        self.assertEqual(code, 502)
+        self.assertNotIn(b"PRIVATE_TEST_SECURITY", body)
+
+    def test_head_map_proxy_is_not_allowed(self):
+        with patch("app.proxy_get") as transport:
+            code, _, _ = self.request(
+                "/_AMapService/v4/map/styles?key=PUBLIC",
+                {"Sec-Fetch-Site": "same-origin"},
+                method="HEAD",
+            )
+        self.assertEqual(code, 405)
+        self.assertEqual(self.gateway.reservations, 0)
+        transport.assert_not_called()
 
 
 if __name__ == "__main__":

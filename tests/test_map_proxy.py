@@ -1,6 +1,6 @@
 """Offline AMap same-origin proxy validation: rejects SSRF and secret overrides."""
 import unittest
-from amap_client import Disabled
+from amap_client import Disabled, ProviderError
 from unittest.mock import patch
 from map_proxy import prepare_proxy_path, proxy_get, select_upstream
 
@@ -86,6 +86,112 @@ class MapProxyTests(unittest.TestCase):
     def test_missing_security_code_fails_closed(self):
         with self.assertRaises(Disabled):
             prepare_proxy_path("/_AMapService/v4/map/styles?key=abc", "")
+
+
+    def test_official_web_service_catch_all_accepts_versioned_jsapi_paths_only(self):
+        for path in (
+            "/_AMapService/v3/assistant/inputtips?keywords=x",
+            "/_AMapService/v3/place/text?keywords=x",
+            "/_AMapService/v3/config/district?keywords=x",
+            "/_AMapService/v4/grasproad/driving",
+        ):
+            with self.subTest(path=path):
+                prepared = prepare_proxy_path(path, "PRIVATE_TEST_SECURITY")
+                self.assertEqual(select_upstream(prepared), "restapi.amap.com")
+        for path in (
+            "/_AMapService/v2/place/text",
+            "/_AMapService/v3/../secret",
+            "/_AMapService/v3/%2e%2e/secret",
+            "/_AMapService/v3//place/text",
+            "/_AMapService/v3/place\\text",
+        ):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                prepare_proxy_path(path, "PRIVATE_TEST_SECURITY")
+
+    def test_proxy_rejects_oversized_response_without_returning_partial_body(self):
+        class FakeResponse:
+            status = 200
+            def getheader(self, name, default=None):
+                return "application/json" if name == "Content-Type" else None
+            def read(self, size):
+                return b"x" * size
+        class FakeHTTPS:
+            def __init__(self, host, timeout):
+                pass
+            def request(self, method, path, headers):
+                pass
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                pass
+        with patch("map_proxy.MAX_BYTES", 8), patch(
+                "map_proxy.http.client.HTTPSConnection", FakeHTTPS):
+            with self.assertRaises(ProviderError):
+                proxy_get("/v4/map/styles?jscode=PRIVATE_TEST_SECURITY")
+
+    def test_proxy_rejects_unsafe_content_type(self):
+        class FakeResponse:
+            status = 200
+            def getheader(self, name, default=None):
+                return "text/html; charset=utf-8" if name == "Content-Type" else None
+            def read(self, size):
+                return b"<html>fixture</html>"
+        class FakeHTTPS:
+            def __init__(self, host, timeout):
+                pass
+            def request(self, method, path, headers):
+                pass
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                pass
+        with patch("map_proxy.http.client.HTTPSConnection", FakeHTTPS):
+            with self.assertRaises(ProviderError):
+                proxy_get("/v4/map/styles?jscode=PRIVATE_TEST_SECURITY")
+
+    def test_proxy_does_not_follow_redirects(self):
+        calls = []
+        class FakeResponse:
+            status = 302
+            def getheader(self, name, default=None):
+                return "https://evil.example/" if name == "Location" else None
+            def read(self, size):
+                calls.append("read")
+                return b""
+        class FakeHTTPS:
+            def __init__(self, host, timeout):
+                calls.append(("connect", host))
+            def request(self, method, path, headers):
+                calls.append(("request", method, path))
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                calls.append("close")
+        with patch("map_proxy.http.client.HTTPSConnection", FakeHTTPS):
+            with self.assertRaises(ProviderError):
+                proxy_get("/v4/map/styles?jscode=PRIVATE_TEST_SECURITY")
+        self.assertNotIn("read", calls)
+        self.assertEqual(sum(1 for x in calls if isinstance(x, tuple) and x[0] == "connect"), 1)
+
+    def test_proxy_rejects_declared_oversized_content_length(self):
+        class FakeResponse:
+            status = 200
+            def getheader(self, name, default=None):
+                return "application/json" if name == "Content-Type" else "9999999"
+            def read(self, size):
+                raise AssertionError("must reject from Content-Length before reading")
+        class FakeHTTPS:
+            def __init__(self, host, timeout):
+                pass
+            def request(self, method, path, headers):
+                pass
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                pass
+        with patch("map_proxy.http.client.HTTPSConnection", FakeHTTPS):
+            with self.assertRaises(ProviderError):
+                proxy_get("/v4/map/styles?jscode=PRIVATE_TEST_SECURITY")
 
 
 if __name__ == "__main__":

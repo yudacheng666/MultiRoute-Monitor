@@ -91,6 +91,7 @@
         <label>JS 地图初始化本月剩余次数<input name="map_quota_remaining" type="number" min="2" max="100000000" step="1" required placeholder="从高德控制台查询"></label>
       </div>
       <p class="dialog-help">程序只使用你填写剩余额度的一半作为预算，并进一步限制：驾车规划最多 30,000 次/月、1,000 次/日；地图初始化最多 900 次/月、30 次/日。计数损坏或超限时自动停止。</p>
+      <label class="auth-check"><input name="personal_developer_verified" type="checkbox" required> 我已完成个人开发者认证并签署高德开放平台服务协议</label>
       <label class="auth-check"><input name="approved_by_amap" type="checkbox" required> 我已收到高德明确书面答复，确认允许此个人日常路线监控用途</label>
       <label class="auth-check"><input name="quota_verified" type="checkbox" required> 我已在高德控制台核对本月剩余免费配额</label>
       <label class="auth-check"><input name="account_exclusive" type="checkbox" required> 同一开发者账号没有其他应用或 Key 共用并消耗上述配额</label>

@@ -61,6 +61,7 @@ class LocalAuthorizationTests(unittest.TestCase):
             "ticket_id":"AMAP-TICKET-2026",
             "route_quota_remaining":150000,
             "map_quota_remaining":1500000,
+            "personal_developer_verified":True,
             "approved_by_amap":True,
             "quota_verified":True,
             "account_exclusive":True,

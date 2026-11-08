@@ -33,7 +33,7 @@ async function main() {
     await page.getByRole('button',{name:'高德授权设置'}).click();
     assert.equal(await page.locator('#amap-auth-dialog').isVisible(),true);
     assert.match(await page.locator('#amap-auth-dialog').innerText(),/只有在高德工单已明确书面确认/);
-    assert.equal(await page.locator('#amap-auth-form input[type=checkbox]').count(),4);
+    assert.equal(await page.locator('#amap-auth-form input[type=checkbox]').count(),5);
     await page.getByRole('button',{name:'暂不启用'}).click();
     assert.equal(await page.locator('#amap-auth-dialog').isVisible(),false);
     assert.equal(await page.locator('.summary').count(),0,'no redundant statistics section');

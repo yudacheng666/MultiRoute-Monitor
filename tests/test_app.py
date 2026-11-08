@@ -311,7 +311,7 @@ class AuthorizationHTTPTests(unittest.TestCase):
 
     def test_authorization_endpoint_enables_only_after_confirmation_and_never_stores_keys(self):
         payload={"ticket_id":"AMAP-2026-001","route_quota_remaining":150000,
-                 "map_quota_remaining":1500000,"approved_by_amap":True,
+                 "map_quota_remaining":1500000,"personal_developer_verified":True,"approved_by_amap":True,
                  "quota_verified":True,"account_exclusive":True,"zero_cost_ack":True}
         code,data=self.post("/api/amap/authorize",payload)
         self.assertEqual(code,200)
@@ -325,7 +325,7 @@ class AuthorizationHTTPTests(unittest.TestCase):
 
     def test_disable_endpoint_immediately_turns_live_off(self):
         payload={"ticket_id":"AMAP-2026-001","route_quota_remaining":150000,
-                 "map_quota_remaining":1500000,"approved_by_amap":True,
+                 "map_quota_remaining":1500000,"personal_developer_verified":True,"approved_by_amap":True,
                  "quota_verified":True,"account_exclusive":True,"zero_cost_ack":True}
         self.assertEqual(self.post("/api/amap/authorize",payload)[0],200)
         code,data=self.post("/api/amap/disable",{})

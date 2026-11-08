@@ -114,7 +114,7 @@ def save_private_authorization(root, payload):
     route_remaining = payload.get("route_quota_remaining")
     map_remaining = payload.get("map_quota_remaining")
     confirmations = (
-        "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"
+        "personal_developer_verified", "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"
     )
     if not isinstance(ticket, str) or not AUTH_TICKET_PATTERN.fullmatch(ticket.strip()):
         raise ValueError("请填写有效的高德工单编号")
@@ -139,6 +139,7 @@ def save_private_authorization(root, payload):
         "route_monthly_cap": route_monthly,
         "map_daily_cap": map_daily,
         "map_monthly_cap": map_monthly,
+        "personal_developer_verified": True,
         "approved_by_amap": True,
         "quota_verified": True,
         "account_exclusive": True,
@@ -174,7 +175,7 @@ def read_private_authorization(root):
     if (data.get("enabled") is not True
             or not isinstance(ticket, str) or not AUTH_TICKET_PATTERN.fullmatch(ticket)
             or any(data.get(field) is not True for field in (
-                "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"))
+                "personal_developer_verified", "approved_by_amap", "quota_verified", "account_exclusive", "zero_cost_ack"))
             or not all(isinstance(v, int) and not isinstance(v, bool) and v > 0
                        for v in (route_daily, route_monthly, map_daily, map_monthly))
             or route_daily > 1000 or route_monthly > 30000

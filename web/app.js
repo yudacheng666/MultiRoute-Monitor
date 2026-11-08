@@ -395,6 +395,7 @@
       ticket_id:f.namedItem('ticket_id').value.trim(),
       route_quota_remaining:Number(f.namedItem('route_quota_remaining').value),
       map_quota_remaining:Number(f.namedItem('map_quota_remaining').value),
+      personal_developer_verified:f.namedItem('personal_developer_verified').checked,
       approved_by_amap:f.namedItem('approved_by_amap').checked,
       quota_verified:f.namedItem('quota_verified').checked,
       account_exclusive:f.namedItem('account_exclusive').checked,

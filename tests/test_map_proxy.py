@@ -22,7 +22,7 @@ class MapProxyTests(unittest.TestCase):
         paths = [
             "/_AMapService/https://evil.example/",
             "/_AMapService/v1/arbitrary/action",
-            "/_AMapService/v4/secret/admin",
+            "/_AMapService/v5/secret/admin",
             "/_AMapService/v3/../../secret",
             "/_AMapService/v3/assistant/../../secret",
             "/_AMapService/%2e%2e/v3/assistant/inputtips",

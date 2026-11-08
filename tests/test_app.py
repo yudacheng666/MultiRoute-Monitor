@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from amap_client import LiveGateway, ProviderError, RateLimited
 from app import ASSETS, make_server
+from setup_amap import authorization_path, save_private_keys
 
 
 class LocalServerTests(unittest.TestCase):
@@ -263,6 +264,73 @@ class MapProxyHTTPIntegrationTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=3)
+
+
+class AuthorizationHTTPTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.root=Path(self.tmp.name)
+        save_private_keys(self.root,{
+            "MRM_AMAP_WEB_KEY":"EXAMPLE_WEB_KEY_123",
+            "MRM_AMAP_JS_KEY":"EXAMPLE_JS_KEY_456",
+            "MRM_AMAP_JS_SECURITY":"EXAMPLE_JS_SECURITY_789",
+        })
+        self.server=make_server(0,root=self.root)
+        self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
+        self.thread.start()
+        self.port=self.server.server_port
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+        self.tmp.cleanup()
+
+    def post(self,path,payload):
+        conn=http.client.HTTPConnection("127.0.0.1",self.port,timeout=3)
+        body=json.dumps(payload)
+        conn.request("POST",path,body=body,headers={
+            "Host":"127.0.0.1:%s" % self.port,
+            "Origin":"http://127.0.0.1:%s" % self.port,
+            "X-MRM-Request":"1",
+            "Content-Type":"application/json"})
+        response=conn.getresponse()
+        data=json.loads(response.read())
+        conn.close()
+        return response.status,data
+
+    def test_authorization_endpoint_requires_all_user_confirmations(self):
+        payload={"ticket_id":"AMAP-2026-001","route_quota_remaining":150000,
+                 "map_quota_remaining":1500000,"approved_by_amap":False,
+                 "quota_verified":True,"account_exclusive":True,"zero_cost_ack":True}
+        code,data=self.post("/api/amap/authorize",payload)
+        self.assertEqual(code,400)
+        self.assertFalse(self.server.gateway.status()["live_enabled"])
+        self.assertFalse(authorization_path(self.root).exists())
+
+    def test_authorization_endpoint_enables_only_after_confirmation_and_never_stores_keys(self):
+        payload={"ticket_id":"AMAP-2026-001","route_quota_remaining":150000,
+                 "map_quota_remaining":1500000,"approved_by_amap":True,
+                 "quota_verified":True,"account_exclusive":True,"zero_cost_ack":True}
+        code,data=self.post("/api/amap/authorize",payload)
+        self.assertEqual(code,200)
+        self.assertTrue(data["live_enabled"])
+        self.assertTrue(data["js_map_enabled"])
+        self.assertEqual(data["remaining_monthly_app_budget"],30000)
+        saved=authorization_path(self.root).read_text(encoding="utf-8")
+        self.assertNotIn("EXAMPLE_WEB_KEY_123",saved)
+        self.assertNotIn("EXAMPLE_JS_SECURITY_789",saved)
+        self.assertTrue(self.server.gateway.status()["live_enabled"])
+
+    def test_disable_endpoint_immediately_turns_live_off(self):
+        payload={"ticket_id":"AMAP-2026-001","route_quota_remaining":150000,
+                 "map_quota_remaining":1500000,"approved_by_amap":True,
+                 "quota_verified":True,"account_exclusive":True,"zero_cost_ack":True}
+        self.assertEqual(self.post("/api/amap/authorize",payload)[0],200)
+        code,data=self.post("/api/amap/disable",{})
+        self.assertEqual(code,200)
+        self.assertFalse(data["live_enabled"])
+        self.assertFalse(self.server.gateway.status()["live_enabled"])
 
 
 if __name__ == "__main__":

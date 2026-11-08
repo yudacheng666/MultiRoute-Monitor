@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from setup_amap import FIELDS, private_key_path, read_private_keys, save_private_keys
+from setup_amap import (FIELDS, private_key_path, read_private_keys, save_private_keys,
+                        authorization_path, read_private_authorization, save_private_authorization,
+                        disable_private_authorization)
 from amap_client import LiveGateway
 
 
@@ -51,6 +53,54 @@ class LocalSecretTests(unittest.TestCase):
             update={**read_private_keys(root), "MRM_AMAP_JS_KEY":"EXAMPLE_VALID_JS"}
             save_private_keys(root, update)
             self.assertEqual(read_private_keys(root), update)
+
+
+class LocalAuthorizationTests(unittest.TestCase):
+    def payload(self):
+        return {
+            "ticket_id":"AMAP-TICKET-2026",
+            "route_quota_remaining":150000,
+            "map_quota_remaining":1500000,
+            "approved_by_amap":True,
+            "quota_verified":True,
+            "account_exclusive":True,
+            "zero_cost_ack":True,
+        }
+
+    def test_authorization_requires_every_attestation_and_applies_half_quota_reserve(self):
+        with tempfile.TemporaryDirectory() as root:
+            bad=self.payload()
+            bad["approved_by_amap"]=False
+            with self.assertRaises(ValueError):
+                save_private_authorization(root,bad)
+            record=save_private_authorization(root,self.payload())
+            self.assertEqual(record["route_monthly_cap"],30000)
+            self.assertEqual(record["route_daily_cap"],1000)
+            self.assertEqual(record["map_monthly_cap"],900)
+            self.assertEqual(record["map_daily_cap"],30)
+            flags=read_private_authorization(root)
+            self.assertEqual(flags["MRM_MONTHLY_REQUEST_CAP"],"30000")
+            self.assertEqual(flags["MRM_MAP_INIT_MONTHLY_CAP"],"900")
+            text=authorization_path(root).read_text(encoding="utf-8")
+            self.assertNotIn("PRIVATE_SECRET",text)
+
+    def test_invalid_or_corrupt_authorization_file_fails_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            path=authorization_path(root)
+            path.parent.mkdir()
+            path.write_text("{broken")
+            flags=read_private_authorization(root)
+            self.assertEqual(flags["MRM_USAGE_AUTHORIZED"],"NO")
+            self.assertEqual(flags["MRM_EXPLICIT_LIVE_OPT_IN"],"NO")
+
+    def test_disable_marker_overrides_authorization_and_can_be_reenabled(self):
+        with tempfile.TemporaryDirectory() as root:
+            save_private_authorization(root,self.payload())
+            self.assertEqual(read_private_authorization(root)["MRM_USAGE_AUTHORIZED"],"YES")
+            disable_private_authorization(root)
+            self.assertEqual(read_private_authorization(root)["MRM_USAGE_AUTHORIZED"],"NO")
+            save_private_authorization(root,self.payload())
+            self.assertEqual(read_private_authorization(root)["MRM_USAGE_AUTHORIZED"],"YES")
 
 
 if __name__ == "__main__":

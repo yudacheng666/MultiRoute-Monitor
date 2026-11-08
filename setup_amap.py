@@ -156,14 +156,16 @@ def disable_private_authorization(root):
 def read_private_authorization(root):
     """Return only validated runtime switches; never return ticket/quota metadata."""
     target = authorization_path(root)
+    if not target.exists():
+        return {}
     try:
         if target.is_symlink():
             return dict(AUTH_FLAGS_DISABLED)
         data = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
-        return {}
+        return dict(AUTH_FLAGS_DISABLED)
     if not isinstance(data, dict):
-        return {}
+        return dict(AUTH_FLAGS_DISABLED)
     if data.get("disabled") is True:
         return dict(AUTH_FLAGS_DISABLED)
     ticket = data.get("ticket_id")
@@ -177,7 +179,7 @@ def read_private_authorization(root):
                        for v in (route_daily, route_monthly, map_daily, map_monthly))
             or route_daily > 1000 or route_monthly > 30000
             or map_daily > 30 or map_monthly > 900):
-        return {}
+        return dict(AUTH_FLAGS_DISABLED)
     return {
         "MRM_USAGE_AUTHORIZED": "YES",
         "MRM_FREE_QUOTA_VERIFIED": "YES",

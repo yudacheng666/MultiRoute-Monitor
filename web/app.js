@@ -369,7 +369,6 @@
         document.querySelector('.mock-flag').textContent='模拟模式 · 非真实路况';
       }
       render();
-      setupTimer();
     }).catch(function() {
       state.liveReady=false;
       document.getElementById('amap-status').textContent='高德接口状态不可用 · 保持模拟模式';

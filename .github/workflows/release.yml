@@ -1,0 +1,49 @@
+name: Build the one final Windows-ready release
+on:
+  push:
+    branches:
+      - "release/v*"
+permissions:
+  contents: write
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python integration tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Node tests
+        run: node --test tests/test_core.cjs tests/test_amap_map.cjs
+      - name: Install browser test tooling
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Chromium end-to-end tests
+        run: node tests/test_browser.cjs
+      - name: Build clean ZIP and SHA256
+        shell: bash
+        run: |
+          VERSION="\${GITHUB_REF_NAME#release/}"
+          ZIP="MultiRoute-Monitor-\${VERSION}-Windows.zip"
+          git archive --format=zip --prefix="MultiRoute-Monitor-\${VERSION}/" "\${GITHUB_SHA}" -o "\${ZIP}"
+          sha256sum "\${ZIP}" > "\${ZIP}.sha256"
+          printf '%s\n' "\${ZIP}" > release-asset-name.txt
+      - name: Publish the single final GitHub Release
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="\${GITHUB_REF_NAME#release/}"
+          ZIP="$(cat release-asset-name.txt)"
+          gh release create "\${VERSION}" "\${ZIP}" "\${ZIP}.sha256" \
+            --target "\${GITHUB_SHA}" \
+            --title "MultiRoute-Monitor \${VERSION}" \
+            --notes "Final Windows-ready MultiRoute-Monitor build. All automated tests passed on this exact commit. Local secrets and local data are excluded. Real AMap calls remain disabled until the user confirms written permission and account-level free quota in the in-app authorization gate."

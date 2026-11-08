@@ -4,6 +4,8 @@
   const routeGrid = document.getElementById('routes');
   const form = document.getElementById('route-form');
   const dialog = document.getElementById('route-dialog');
+  const amapAuthDialog = document.getElementById('amap-auth-dialog');
+  const amapAuthForm = document.getElementById('amap-auth-form');
   const formError = document.getElementById('form-error');
   const intervalSelect = document.getElementById('refresh-interval');
   const pauseButton = document.getElementById('pause-toggle');
@@ -356,6 +358,8 @@
       batchButton.hidden=!state.liveReady;
       autoWrap.hidden=!state.liveReady;
       autoToggle.checked=state.liveAuto;
+      document.getElementById('amap-disable').hidden=!state.liveReady;
+      document.getElementById('amap-auth-open').textContent=state.liveReady?'高德接入设置':'高德授权设置';
       label.textContent=state.liveReady ?
         ('高德真实接口已授权 · 今日剩余 '+x.remaining_app_budget+' 次 · 本月剩余 '+x.remaining_monthly_app_budget+
          ' 次 · 地图初始化今日/本月剩余 '+x.remaining_map_initializations+'/'+x.remaining_monthly_map_initializations+
@@ -376,16 +380,71 @@
       state.liveAuto=false;
       document.getElementById('refresh-live-all').hidden=true;
       document.getElementById('live-auto-wrap').hidden=true;
+      document.getElementById('amap-disable').hidden=true;
+      document.getElementById('amap-auth-open').textContent='高德授权设置';
       document.getElementById('amap-status').textContent='高德接口状态不可用 · 保持模拟模式';
       document.querySelector('.mock-flag').textContent='模拟模式 · 非真实路况';
       render();
     });
   }
+
+  async function submitAmapAuthorization(event) {
+    event.preventDefault();
+    const f=amapAuthForm.elements;
+    const payload={
+      ticket_id:f.namedItem('ticket_id').value.trim(),
+      route_quota_remaining:Number(f.namedItem('route_quota_remaining').value),
+      map_quota_remaining:Number(f.namedItem('map_quota_remaining').value),
+      approved_by_amap:f.namedItem('approved_by_amap').checked,
+      quota_verified:f.namedItem('quota_verified').checked,
+      account_exclusive:f.namedItem('account_exclusive').checked,
+      zero_cost_ack:f.namedItem('zero_cost_ack').checked
+    };
+    const submit=amapAuthForm.querySelector('button[type="submit"]');
+    submit.disabled=true;
+    try {
+      const response=await fetch('/api/amap/authorize',{method:'POST',
+        headers:{'Content-Type':'application/json','X-MRM-Request':'1'},
+        body:JSON.stringify(payload),cache:'no-store'});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||'高德授权设置失败');
+      amapAuthDialog.close();
+      showToast('本机授权与额度门禁已保存；真实查询现已可用');
+      detectLiveAvailability();
+    } catch(error) {
+      showToast(String(error.message||'保存失败').slice(0,100));
+    } finally {
+      submit.disabled=false;
+    }
+  }
+  async function disableAmap() {
+    if(!window.confirm('停用后将立即停止新的高德路线查询和地图代理请求。确定停用吗？'))return;
+    try {
+      const response=await fetch('/api/amap/disable',{method:'POST',
+        headers:{'Content-Type':'application/json','X-MRM-Request':'1'},
+        body:JSON.stringify({}),cache:'no-store'});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||'停用失败');
+      state.liveAuto=false;
+      setupTimer();
+      showToast('高德真实接口已停用，页面恢复模拟模式');
+      detectLiveAvailability();
+    } catch(error) {
+      showToast(String(error.message||'停用失败').slice(0,100));
+    }
+  }
+
   function init() {
     state.routes = Core.loadRoutes(getStorage(KEY_ROUTES));
     state.interval = Core.safeInterval(getStorage(KEY_INTERVAL));
     intervalSelect.value = String(state.interval);
     document.getElementById('add-route').addEventListener('click', function () {openDialog(null);});
+    document.getElementById('amap-auth-open').addEventListener('click',function(){amapAuthDialog.showModal();});
+    document.getElementById('amap-auth-close').addEventListener('click',function(){amapAuthDialog.close();});
+    document.getElementById('amap-auth-cancel').addEventListener('click',function(){amapAuthDialog.close();});
+    amapAuthDialog.addEventListener('click',function(e){if(e.target===amapAuthDialog)amapAuthDialog.close();});
+    amapAuthForm.addEventListener('submit',submitAmapAuthorization);
+    document.getElementById('amap-disable').addEventListener('click',disableAmap);
     document.getElementById('refresh-all').addEventListener('click', function () {refreshAll(false);});
     document.getElementById('refresh-live-all').addEventListener('click', function () {refreshLiveAll(false);});
     document.getElementById('live-auto-refresh').addEventListener('change', function(e) {

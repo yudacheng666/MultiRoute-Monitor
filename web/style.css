@@ -5,3 +5,9 @@
 .schematic.mapbox-active .amap-logo,.schematic.mapbox-active .amap-copyright{display:block}
 
 [hidden]{display:none!important}.live-auto-wrap{display:flex;align-items:center;gap:6px;color:#a8c3d0!important;font-size:11px!important;white-space:nowrap}.live-auto-wrap input{accent-color:#2a9d8f}
+
+#amap-auth-dialog{width:min(94vw,680px);max-height:90vh;overflow:auto}
+#amap-auth-dialog .route-form{padding:24px}
+#amap-auth-dialog .auth-check{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px;margin:11px 0;color:#d1deea;font-size:12px;line-height:1.55}
+#amap-auth-dialog .auth-check input{width:auto;flex:0 0 auto;margin:2px 0 0;accent-color:#2a9d8f}
+#amap-auth-warning{margin:12px 0 0;background:#30272a;border-color:#795158;color:#f0c5c8}
